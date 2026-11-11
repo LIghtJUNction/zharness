@@ -1,4 +1,4 @@
-use zharness::{mcp::{Outcome, Server}, tools::{Error as _, Executor, Tool, ToolSet}};
+use zharness::{mcp::{Outcome, Server}, tools::{Executor, Tool, ToolSet}};
 
 struct Echo;
 impl Executor for Echo {
@@ -22,7 +22,7 @@ fn registry_rejects_duplicate_names() {
         TOOLS[0],
         Tool { name: "echo", description: "duplicate", input_schema: r#"{"type":"object"}"# },
     ];
-    assert_eq!(ToolSet::new(&duplicate).unwrap_err(), zharness::mcp::Error::DuplicateTool);
+    assert!(matches!(ToolSet::new(&duplicate), Err(zharness::mcp::Error::DuplicateTool)));
 }
 
 #[test]
