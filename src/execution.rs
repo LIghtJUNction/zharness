@@ -1,6 +1,12 @@
 //! Hooks around an actual Executor invocation, distinct from ToolLoop scheduling.
 //! No execution, history commit, retry or output transformation occurs implicitly.
-use crate::{Error, bridge::{Completion, Prepared}, hooks::{Decision, HookResult, Hooks}, tools::Executor, validation::Arguments};
+use crate::{
+    Error,
+    bridge::{Completion, Prepared},
+    hooks::{Decision, HookResult, Hooks},
+    tools::Executor,
+    validation::Arguments,
+};
 
 /// Validated call at the last synchronous boundary before invoking user code.
 #[derive(Clone, Copy, Debug)]
@@ -35,7 +41,11 @@ impl<'a> Prepared<'a> {
         output: &'o mut [u8],
         hooks: &mut impl Hooks,
     ) -> Result<HookResult<Completion<'a, 'o>>, Error> {
-        let call = BeforeExecute { call_id: self.call_id(), name: self.name(), arguments: self.arguments() };
+        let call = BeforeExecute {
+            call_id: self.call_id(),
+            name: self.name(),
+            arguments: self.arguments(),
+        };
         match hooks.before_execute(call) {
             Decision::Allow => {}
             Decision::Pause => return Ok(HookResult::Paused),

@@ -17,14 +17,28 @@ pub struct Command<'a> {
 }
 impl<'a> Command<'a> {
     pub const fn new(id: &'a str, program: &'a str, args: &'a [&'a str]) -> Self {
-        Self { id, program, args, cwd: None }
+        Self {
+            id,
+            program,
+            args,
+            cwd: None,
+        }
     }
-    pub const fn with_cwd(mut self, cwd: &'a str) -> Self { self.cwd = Some(cwd); self }
+    pub const fn with_cwd(mut self, cwd: &'a str) -> Self {
+        self.cwd = Some(cwd);
+        self
+    }
     /// Structural checks only, not executable resolution or an allowlist policy.
     pub fn validate(self) -> Result<(), CommandError> {
-        if self.id.is_empty() || self.program.is_empty() || self.id.contains('\0') || self.program.contains('\0')
+        if self.id.is_empty()
+            || self.program.is_empty()
+            || self.id.contains('\0')
+            || self.program.contains('\0')
             || self.args.iter().any(|arg| arg.contains('\0'))
-            || self.cwd.is_some_and(|cwd| cwd.is_empty() || cwd.contains('\0')) {
+            || self
+                .cwd
+                .is_some_and(|cwd| cwd.is_empty() || cwd.contains('\0'))
+        {
             return Err(CommandError::InvalidCommand);
         }
         Ok(())
@@ -48,18 +62,32 @@ impl<'a> Command<'a> {
         let output = match executor.execute(self, stdout, stderr) {
             Ok(output) => output,
             Err(error) => {
-                hooks.command_error(CommandFailure { command: self, error });
+                hooks.command_error(CommandFailure {
+                    command: self,
+                    error,
+                });
                 return Err(error);
             }
         };
         // Process output can be arbitrary bytes. Do not lose binary data by
         // coercing it to UTF-8 or confusing nonzero exit with capture failure.
-        let (Some(stdout), Some(stderr)) = (stdout.get(..output.stdout_len), stderr.get(..output.stderr_len)) else {
+        let (Some(stdout), Some(stderr)) = (
+            stdout.get(..output.stdout_len),
+            stderr.get(..output.stderr_len),
+        ) else {
             let error = CommandError::InvalidOutput;
-            hooks.command_error(CommandFailure { command: self, error });
+            hooks.command_error(CommandFailure {
+                command: self,
+                error,
+            });
             return Err(error);
         };
-        let result = CommandResult { command: self, status: output.status, stdout, stderr };
+        let result = CommandResult {
+            command: self,
+            status: output.status,
+            stdout,
+            stderr,
+        };
         hooks.after_command(result);
         Ok(HookResult::Applied(result))
     }
@@ -72,7 +100,9 @@ pub enum ExitStatus {
     Terminated,
 }
 impl ExitStatus {
-    pub const fn success(self) -> bool { matches!(self, Self::Exited(0)) }
+    pub const fn success(self) -> bool {
+        matches!(self, Self::Exited(0))
+    }
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CommandOutput {
@@ -90,7 +120,10 @@ pub struct CommandResult<'c, 'o> {
     pub stderr: &'o [u8],
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum OutputStream { Stdout, Stderr }
+pub enum OutputStream {
+    Stdout,
+    Stderr,
+}
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum CommandError {
@@ -100,13 +133,18 @@ pub enum CommandError {
     Io,
     TimedOut,
     Cancelled,
-    Capacity { stream: OutputStream, needed: usize },
+    Capacity {
+        stream: OutputStream,
+        needed: usize,
+    },
     InvalidOutput,
     /// Adapter-defined bounded error code; rich OS diagnostics remain caller-owned.
     Adapter(u32),
 }
 impl core::fmt::Display for CommandError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result { write!(f, "{self:?}") }
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{self:?}")
+    }
 }
 impl core::error::Error for CommandError {}
 #[derive(Clone, Copy, Debug)]
@@ -119,5 +157,10 @@ pub struct CommandFailure<'a> {
 /// an implicit shell, bound its output, and report rather than hide failures.
 /// All OS resources, timeout/cancellation policy and environment are caller-owned.
 pub trait CommandExecutor {
-    fn execute(&mut self, command: Command<'_>, stdout: &mut [u8], stderr: &mut [u8]) -> Result<CommandOutput, CommandError>;
+    fn execute(
+        &mut self,
+        command: Command<'_>,
+        stdout: &mut [u8],
+        stderr: &mut [u8],
+    ) -> Result<CommandOutput, CommandError>;
 }
