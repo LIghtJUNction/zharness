@@ -4,6 +4,7 @@
 
 pub mod bridge;
 pub mod cluster;
+#[doc = include_str!("../COMMANDS.md")]
 pub mod command;
 pub mod context;
 pub mod execution;
