@@ -102,12 +102,7 @@ jobs:
           cargo clippy --all-targets --locked -- -D warnings
           cargo test --all-targets --locked
           cargo test --release --all-targets --locked
-          python3 - <<'PY'
-          import subprocess
-          for name in ["basic", "tool_registry", "tool_execution", "mcp_server", "custom_transport", "zcall_bridge"]:
-              subprocess.run(["cargo", "run", "--example", name, "--locked"], check=True)
-          subprocess.run(["cargo", "run", "--example", "mcp_stdio", "--locked"], input=b"", check=True)
-          PY
+          python -c "import subprocess; names=['basic','tool_registry','tool_execution','mcp_server','custom_transport','zcall_bridge']; [subprocess.run(['cargo','run','--example',n,'--locked'],check=True) for n in names]; subprocess.run(['cargo','run','--example','mcp_stdio','--locked'],input=b'',check=True)"
           cargo check --no-default-features --locked
           cargo check --target wasm32-unknown-unknown --no-default-features --locked
           cargo tree --locked --edges normal --depth 1
