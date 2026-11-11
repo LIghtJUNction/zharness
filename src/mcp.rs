@@ -1,6 +1,6 @@
 //! Bounded MCP JSON-RPC primitives and a small MCP tools server.
 
-use crate::{json::{self, Kind, Value}, tools::{Executor, ToolSet}};
+use crate::{json::{self, Kind}, tools::{Executor, ToolSet}};
 
 /// MCP protocol version implemented by this server.
 pub const PROTOCOL_VERSION: &str = "2025-11-25";
