@@ -3,7 +3,7 @@
 //! Before hooks can allow, pause or deny a proposed action. After hooks observe
 //! committed state and cannot turn a completed side effect into a retry signal.
 //! A paused before hook may be evaluated again; it must not execute the action.
-use crate::{Error, Invocation, context::Group, zcall::v1::TurnOutcome};
+use crate::{Error, Invocation, context::Group, output::ResultMeta, zcall::v1::TurnOutcome};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[must_use]
@@ -73,11 +73,33 @@ pub enum After<'a> {
         task: u64,
     },
 }
+
+/// A result-processing proposal, after tool execution but before history commit.
+/// Pause/deny retains original output and does not execute a transform.
+#[derive(Clone, Copy, Debug)]
+pub struct BeforeResult<'a> {
+    pub meta: ResultMeta<'a>,
+    pub text: &'a str,
+}
+/// A validated transform output. This observes processing, not ToolLoop/history
+/// commitment. It cannot veto the result. Avoid leaking secrets into audit logs.
+#[derive(Clone, Copy, Debug)]
+pub struct AfterResult<'a> {
+    pub meta: ResultMeta<'a>,
+    pub original_bytes: usize,
+    pub text: &'a str,
+}
+
 pub trait Hooks {
     fn before(&mut self, _event: Before<'_>) -> Decision {
         Decision::Allow
     }
     fn after(&mut self, _event: After<'_>) {}
+    /// Additive default method; existing lifecycle implementations remain valid.
+    fn before_result(&mut self, _event: BeforeResult<'_>) -> Decision {
+        Decision::Allow
+    }
+    fn after_result(&mut self, _event: AfterResult<'_>) {}
 }
 #[derive(Clone, Copy, Debug, Default)]
 pub struct NoHooks;
@@ -95,6 +117,16 @@ impl<A: Hooks, B: Hooks> Hooks for (A, B) {
         self.0.after(event);
         self.1.after(event);
     }
+    fn before_result(&mut self, event: BeforeResult<'_>) -> Decision {
+        match self.0.before_result(event) {
+            Decision::Allow => self.1.before_result(event),
+            decision => decision,
+        }
+    }
+    fn after_result(&mut self, event: AfterResult<'_>) {
+        self.0.after_result(event);
+        self.1.after_result(event);
+    }
 }
 impl<H: Hooks + ?Sized> Hooks for &mut H {
     fn before(&mut self, event: Before<'_>) -> Decision {
@@ -102,6 +134,12 @@ impl<H: Hooks + ?Sized> Hooks for &mut H {
     }
     fn after(&mut self, event: After<'_>) {
         (**self).after(event);
+    }
+    fn before_result(&mut self, event: BeforeResult<'_>) -> Decision {
+        (**self).before_result(event)
+    }
+    fn after_result(&mut self, event: AfterResult<'_>) {
+        (**self).after_result(event);
     }
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

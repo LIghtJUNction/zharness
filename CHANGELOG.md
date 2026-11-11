@@ -1,6 +1,21 @@
 # Changelog
 
-## Unreleased — 0.2.0
+## 0.2.1 — 2026-11-11
+
+- Add caller-buffered ToolResultTransform and Completion transform helpers that
+  preserve real call IDs and original error flags before history commitment.
+- Add backward-compatible default before_result/after_result hook methods with
+  ordered tuple/reference forwarding and explicit allow/pause/deny handling.
+- Add zero-copy Identity, Trim, adjacent-line deduplication, marked UTF-8-safe
+  truncation, validated JSON minification and caller-buffered transform chains.
+- Validate callback lengths/UTF-8; preserve original results on processing failure;
+  never retry the original tool or fall back to unfiltered output automatically.
+- Add a runnable reduction example, real interleaved-session and parallel-buffer
+  tests, and 25 allocation-counted output benchmark cases.
+- Publish the native harness work from the previously unreleased 0.2.0 baseline.
+- Keep zcall =0.1.2 as the only direct dependency; no MCP integration is restored.
+
+## 0.2.0 — unpublished development baseline
 
 - Remove the MCP integration workspace and all sibling-repository CI checkouts.
 - Add native caller-buffered Context groups, token budgets, pinned retention,
@@ -13,7 +28,6 @@
 - Add standalone context, hook, loop and cluster examples; real stream replay and
   randomized accounting tests; allocation-counted native component benchmarks.
 - Keep zcall =0.1.2 as the sole direct dependency and preserve no_std core boundaries.
-- No registry publication is performed by the source update.
 
 ## 0.1.1 — 2026-11-11
 

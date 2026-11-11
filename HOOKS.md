@@ -18,17 +18,40 @@ be represented as a fresh retryable proposal just because an observer failed.
 Callbacks are application code: keep them bounded and do not panic across a
 boundary where partial application-side changes would be unsafe.
 
+## Tool-result processing hooks
+
+Completion::transform_with_hooks adds a separate processing boundary after tool
+execution and before history/session commitment. before_result receives read-only
+ResultMeta (tool name, call ID, is_error) and original text. Pause leaves the raw
+result available and skips processing; Deny returns Error::Denied. A transform
+must return valid UTF-8 within caller output bounds before after_result sees it.
+The observer receives original byte length and processed text, but cannot veto.
+
+These are default trait methods, not new variants in the existing Before/After
+enums. Existing Hooks implementations and exhaustive lifecycle-event matches keep
+compiling. Tuple and mutable-reference forwarding apply to the new methods too.
+After::ToolFinished retains its existing meaning: an accepted ToolLoop result.
+after_result means successful processing only; an explicit application retry may
+produce another processing observation before a single eventual loop commit.
+
+Use ToolResultTransform for the actual text policy; use Chain with supplied scratch
+for multiple stages. No fallback to unfiltered raw output occurs on a chain error.
+The returned Completion preserves call ID and is_error. Read [OUTPUT.md](OUTPUT.md)
+for UTF-8, structured data, parallel buffers and semantic-safety contracts.
+
+## Pause and authorization
+
 Pause may cause the same before event to be evaluated again. Before callbacks
 must not perform the proposed tool/model action. Store a decision or query an
-already-available policy result instead. Network-based approval can be handled
-by returning Pause, obtaining approval in the application, then calling next or
-the proposed operation again. The library has no asynchronous approval runtime.
+already-available policy result instead. Remote approval or model-generated
+summary work can be scheduled by the application after a Pause, then processing
+resumes with retained input. The library has no asynchronous approval runtime.
 
 Hooks are explicit control points, not automatic authorization. NoHooks allows
-all proposals. Direct unhooked Context methods deliberately bypass callbacks.
-Task capability masks select eligible workers but do not grant permission to
-perform real external operations. Keep actual authorization at execution time.
+all proposals. Direct unhooked Context/Completion methods deliberately bypass
+callbacks. Task capability masks select eligible workers but do not grant
+permission to perform real external operations. Keep authorization at execution.
 
-Run `cargo run --locked --example hooks`. Hook ordering and short-circuiting,
-no-mutation pause/deny, and single completion observations are exercised by the
-context, turn and cluster test suites.
+Run `cargo run --locked --example hooks` and `cargo run --locked --example tool_output`.
+Tests cover ordering, short-circuiting, unchanged state on pause/deny, successful
+processing observations and separate loop completion observations.

@@ -6,11 +6,13 @@ pub mod bridge;
 pub mod cluster;
 pub mod context;
 pub mod hooks;
+pub mod output;
 pub mod tools;
 pub mod turn;
 pub mod validation;
 
 pub use bridge::Invocation;
+pub use output::ToolResultTransform;
 pub use tools::{Executor, Tool, ToolOutput, ToolSet};
 pub use turn::ToolLoop;
 pub use zcall;
