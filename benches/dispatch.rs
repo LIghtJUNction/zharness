@@ -2,7 +2,8 @@ use std::{hint::black_box, time::Instant};
 
 use zharness::tools::{Tool, ToolSet};
 
-const ITERATIONS: usize = 20_000;
+const ITERATIONS: usize = 1_000;
+const BATCH: usize = 512;
 const SCHEMA: &str = r#"{"type":"object"}"#;
 
 fn percentile(sorted: &[u128], numerator: usize) -> u128 {
@@ -26,8 +27,11 @@ fn main() {
 
         for _ in 0..ITERATIONS {
             let start = Instant::now();
-            black_box(registry.get(black_box(target)));
-            samples.push(start.elapsed().as_nanos());
+            for _ in 0..BATCH {
+                black_box(registry.get(black_box(target)));
+            }
+            let elapsed = start.elapsed().as_nanos();
+            samples.push((elapsed + BATCH as u128 - 1) / BATCH as u128);
         }
         samples.sort_unstable();
 
@@ -37,7 +41,7 @@ fn main() {
         let throughput = 1_000_000_000u128.checked_div(p50).unwrap_or(0);
 
         println!(
-            "tools={count}, p50_ns={p50}, p95_ns={p95}, p99_ns={p99},              throughput_ops_s={throughput}, registry_bytes={}",
+            "tools={count}, p50_ns={p50}, p95_ns={p95}, p99_ns={p99},              throughput_ops_s={throughput}, descriptor_bytes={}",
             descriptors.len() * std::mem::size_of::<Tool<'_>>()
         );
     }
