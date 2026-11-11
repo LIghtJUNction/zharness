@@ -7,9 +7,16 @@ pub mod cluster;
 #[doc = include_str!("../COMMANDS.md")]
 pub mod command;
 pub mod context;
+pub mod conversation;
 pub mod execution;
 pub mod hooks;
+#[doc = include_str!("../LIFECYCLE.md")]
+pub mod lifecycle;
+mod native_lifecycle;
 pub mod output;
+pub mod request;
+pub mod response;
+pub mod settings;
 pub mod tools;
 pub mod turn;
 pub mod validation;

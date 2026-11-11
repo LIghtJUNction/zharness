@@ -1,75 +1,64 @@
-# Lifecycle hooks
+# Hook systems and boundaries
 
-Hooks are explicit, caller-owned control points, not a global interception
-mechanism. Use `(audit, policy)` or nested tuples to compose statically dispatched
-callbacks without mandatory allocation. Gates short-circuit left-to-right;
-normal-return observers all run in the same order and cannot veto results.
+zharness has two complementary interfaces. Existing `Hooks` callbacks remain
+source-compatible and directly cover native tool-loop scheduling, context changes,
+agent assignments, actual tool/command execution and output processing. The new
+unreleased `lifecycle` module supplies typed, independent channels for wider
+conversation, configuration, transport, reply and application-storage boundaries.
+No global callback registry or runtime is added by either interface.
 
-## Select the boundary
+## Existing native callbacks (unchanged)
 
-| Boundary | Before gate | Completion observation | Attempt failure |
+| Boundary | Gate | Completion | Attempt failure |
 |---|---|---|---|
-| Model/tool scheduling and context/agent state | before(Before) | after(After) | Caller handles the returned error |
-| Actual validated Executor call | before_execute | after_execute | execute_error |
-| Command adapter invocation | before_command | after_command | command_error |
-| Optional result reduction | before_result | after_result | Caller handles transform error; no after_result |
+| Model/tool scheduling and context/agent state | before(Before) | after(After) | Returned error |
+| Actual validated Executor | before_execute | after_execute | execute_error |
+| Command adapter | before_command | after_command | command_error |
+| Result reduction | before_result | after_result | Returned transform error; no after_result |
 
-Before::Tool means a ToolLoop ticket is about to be issued, not that a process
-has started. After::ToolFinished means the application committed the loop result,
-not that an Executor has just returned. The added execution callbacks close that
-gap without changing the meanings or variants of existing lifecycle enums.
+Before::Tool issues a ticket; it is not actual execution. After::ToolFinished is
+loop-result commitment; it is not just an Executor return. Paused/denied execution
+never invokes the adapter or modifies output. Business-error tool results and
+nonzero command exits remain completed unsuccessful results, distinct from an
+adapter error. Output reduction remains an explicit step before history commitment.
+Existing tuple/reference forwarding and default callback methods are unchanged.
 
-## Gate and observer rules
+## Grouped lifecycle channels (new source API)
 
-Allow permits the operation. Pause returns HookResult::Paused (or Action::Paused
-at the ToolLoop layer) without performing the proposed action. Deny returns the
-corresponding Denied error. In the execution wrappers, paused/denied calls leave
-output buffers unchanged, never invoke the adapter and produce no completion or
-attempt-failure callback. A before callback may therefore be evaluated again;
-it must not perform the action or assume it is observing a once-only attempt.
+Use `Gate<E>`, `Observer<E>` and `Interceptor<E>` independently for typed event E.
+The ten families are conversation, model, prompt, request, response, tool, context,
+agent, persistence and runtime. They cover 97 action labels without expanding the
+legacy Hooks trait. Gate controls proposals; Observer records facts; Interceptor
+edits a copied candidate before validation/gating. See LIFECYCLE.md for every action,
+exact native entry points, compiled examples and manual-integration boundaries.
 
-After callbacks see committed state or validated output for their documented
-boundary. They cannot roll back side effects, replace return values or initiate
-implicit retries. Execution error observers receive the original error and cannot
-suppress it. Panics are not caught by the no_std library: guarantees about a final
-callback apply to normal Rust returns, not crashes or unwinding hook code.
+`Lifecycle::run` surrounds a real caller operation. `begin`/`finish` lets an app
+schedule/await work itself and later finish the correlated receipt. `notify` is
+only for already-observed facts. None of these methods creates a UI, model call,
+checkpoint store, rate limiter or remote worker by declaring an event name.
 
-Tool business failures (ToolOutput::failure) are valid completed results, retaining
-is_error=true in after_execute. Command nonzero exit codes and signal-like
-termination are likewise observed through after_command with success()==false.
-Spawn/I/O/timeout/cancellation reports and invalid adapter output are distinct
-command_error paths. No helper creates a timeout timer or kills a process itself.
+Native entry points include Conversation message acceptance/edit/delete/start/
+close, ModelSettings model/reasoning/route/options changes, a complete-message
+Sender wrapper, Context request/budget/fork/compaction wrappers and ResponseStream
+for real zcall events. Final assistant acceptance is distinct from a model turn's
+WaitingTools terminal outcome. Legacy and grouped channels are not automatically
+duplicated; applications choose which explicit boundaries to compose.
 
-## Execution and processing
+## Shared operational rules
 
-Prepared::execute_with_hooks gates immediately before calling the supplied
-Executor, then checks output bounds/UTF-8 before after_execute. Command's hooked
-entry point checks capture lengths but preserves stdout/stderr as arbitrary bytes.
-Applications may implement a command-backed Executor by composing both layers.
-Direct Prepared::execute, custom OS calls or unhooked Context operations remain
-explicit opt-outs; the library is not a sandbox and does not intercept them.
+Gates short-circuit left-to-right with Allow, Pause or Deny. Before callbacks can
+repeat and must not perform the proposed action. Observers cannot veto already
+committed effects or turn a failure into success. Processing errors do not grant
+permission to replay side-effecting tools. Panics/crashes are outside normal-return
+observation guarantees, and external I/O may have partial effects before an error.
 
-Completion::transform_with_hooks still owns the optional output-processing stage.
-Its gate receives read-only identity/status metadata and original text; after_result
-sees validated processed text and original length. Identity and failure flags are
-preserved. A processing retry must use retained input and must not re-execute the
-tool. See OUTPUT.md for Chain, JSON minification and semantic-safety rules.
+Use separate state/buffers for concurrent operations or caller synchronization.
+Give each Lifecycle coordinator a unique epoch and keep event borrows alive while
+its receipts are outstanding. New observers default to payload metadata only;
+Visibility::Content opts in to content access. This does not change the original
+raw-data contract of legacy command/tool Hooks. Never log secrets indiscriminately.
 
-Each added method has a default implementation. Existing Hooks implementations,
-Before/After enum matches, tuple chains and mutable-reference forwarding remain
-compatible. Use separate callback state for parallel operations or synchronize it
-in the application. No hidden lock, global registry or spawned worker is added.
-
-## Security and audit
-
-Hook arguments may contain secrets, raw command output or untrusted text. Do not
-log them indiscriminately. Capability bits, command IDs, registered tool names and
-string allowlists are not authentication or OS isolation. Approve dangerous work
-at its actual execution boundary and keep the adapter's environment/sandbox policy
-consistent with the decision. NoHooks allows every structurally valid proposal.
-
-For asynchronous approval, return Pause before execution, obtain the decision in
-the application and invoke again only when authorized. The synchronous wrappers
-do not host an async runtime. Long-running work, cancellation and external effects
-remain application responsibilities; do not claim exactly-once execution from a
-callback counter. Read COMMANDS.md and run the real command_hooks example.
+Direct unhooked Context/Prepared operations, external OS calls and arbitrary UI
+changes remain explicit opt-outs. Hooks are policy boundaries, not authentication,
+process isolation or universal interception. Adapters own their actual network,
+OS, storage, cancellation and environment guarantees.

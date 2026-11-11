@@ -11,6 +11,8 @@ concurrency:
 jobs:
   evidence:
     runs-on: ubuntu-latest
+    env:
+      ZHARNESS_BENCH_SMOKE: '1'
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -18,7 +20,7 @@ jobs:
       - run: |
           rustup toolchain install 1.99.1 --profile minimal
           rustup default 1.99.1
-      - name: Capture source, environment and component benchmarks
+      - name: Capture source, environment and full component benchmarks
         run: |
           mkdir -p "$RUNNER_TEMP/zharness-evidence"
           {
@@ -27,11 +29,20 @@ jobs:
             uname -a
             lscpu
           } > "$RUNNER_TEMP/zharness-evidence/environment.txt"
+          unset ZHARNESS_BENCH_SMOKE
           cargo bench --locked --bench dispatch > "$RUNNER_TEMP/zharness-evidence/benchmark.csv"
           cargo bench --locked --bench output > "$RUNNER_TEMP/zharness-evidence/output-benchmark.csv"
           cargo bench --locked --bench execution > "$RUNNER_TEMP/zharness-evidence/execution-benchmark.csv"
-          cat "$RUNNER_TEMP/zharness-evidence/execution-benchmark.csv"
+          cargo bench --locked --bench lifecycle > "$RUNNER_TEMP/zharness-evidence/lifecycle-benchmark.csv"
+          cat "$RUNNER_TEMP/zharness-evidence/lifecycle-benchmark.csv"
           git archive --format=tar.gz -o "$RUNNER_TEMP/zharness-evidence/source.tar.gz" HEAD
+      - name: Preserve unmodified source test evidence
+        run: |
+          set -euo pipefail
+          cargo test --locked --lib --tests -- --test-threads=1 | tee "$RUNNER_TEMP/zharness-evidence/tests.txt"
+          cargo test --locked --doc | tee "$RUNNER_TEMP/zharness-evidence/doctests.txt"
+          python scripts/examples.py
+          python scripts/test_release.py
       - id: candidate
         env:
           BUMP: patch
@@ -40,16 +51,13 @@ jobs:
       - name: Validate the next candidate without publishing
         env:
           VERSION: ${{ steps.candidate.outputs.version }}
-          ZHARNESS_BENCH_SMOKE: '1'
         run: |
-          python scripts/test_release.py
           python scripts/release.py apply
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add Cargo.toml Cargo.lock
           if ! git diff --cached --quiet; then git commit -m 'ci: validate unpublished candidate'; fi
           cargo test --locked --release --all-targets
-          python scripts/examples.py
           python scripts/audit.py
           cargo package --locked
           cargo publish --dry-run --locked
