@@ -36,17 +36,29 @@ pub enum Error {
     InvalidTool,
     DuplicateTool,
     UnknownTool,
-    InvalidArguments { offset: usize },
-    StringLimit { offset: usize, limit: usize },
-    IntegerOverflow { offset: usize },
+    InvalidArguments {
+        offset: usize,
+    },
+    StringLimit {
+        offset: usize,
+        limit: usize,
+    },
+    IntegerOverflow {
+        offset: usize,
+    },
     /// Units are bytes for byte buffers and slots for descriptor/queue storage.
-    Capacity { needed: usize },
+    Capacity {
+        needed: usize,
+    },
     InvalidOutput,
     Denied,
     ExecutionFailed,
     InvalidState,
     InvalidBudget,
-    BudgetExceeded { needed: u64, available: u64 },
+    BudgetExceeded {
+        needed: u64,
+        available: u64,
+    },
     DuplicateId,
     UnknownId,
     InvalidRange,
