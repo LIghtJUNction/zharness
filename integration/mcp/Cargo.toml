@@ -10,3 +10,5 @@ zharness = { path = "../..", default-features = false }
 zmcp = { path = "zmcp", default-features = false }
 
 [workspace]
+members = ["."]
+exclude = ["zmcp"]

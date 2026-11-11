@@ -48,9 +48,14 @@ jobs:
           cargo +1.99.1 bench --locked --bench dispatch > "$RUNNER_TEMP/zharness-evidence/benchmark.csv"
           cat "$RUNNER_TEMP/zharness-evidence/benchmark.csv"
           git archive --format=tar.gz -o "$RUNNER_TEMP/zharness-evidence/source.tar.gz" HEAD
+      - id: candidate
+        env:
+          BUMP: patch
+          PUBLISH: 'false'
+        run: python scripts/release.py plan
       - name: Exercise version bump and package candidate without publishing
         env:
-          VERSION: 0.1.1
+          VERSION: ${{ steps.candidate.outputs.version }}
           ZHARNESS_BENCH_SMOKE: '1'
         run: |
           rustup default 1.99.1
