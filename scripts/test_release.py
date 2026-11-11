@@ -1,5 +1,10 @@
 import unittest
-from release import next_version, parse_version, precedence
+import json
+import os
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
+from release import next_version, parse_version, precedence, release_request
 
 
 class VersionTests(unittest.TestCase):
@@ -24,6 +29,59 @@ class VersionTests(unittest.TestCase):
                 parse_version(version)
         with self.assertRaises(ValueError):
             next_version('1.0.0', 'arbitrary')
+
+
+class ReleaseRequestTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.root_patch = patch('release.ROOT', self.root)
+        self.root_patch.start()
+        self.addCleanup(self.root_patch.stop)
+        (self.root / '.github').mkdir()
+        (self.root / 'Cargo.toml').write_text('''[package]
+name = "zharness"
+version = "0.1.1"
+[dependencies]
+zcall = { version = "=0.1.2", default-features = false }
+''')
+        self.valid = {'crate': 'zharness', 'version': '0.1.1', 'zcall': '=0.1.2', 'publish': True}
+        self.trusted = {'GITHUB_REF': 'refs/heads/main', 'GITHUB_REPOSITORY': 'LIghtJUNction/zharness'}
+
+    def write(self, payload):
+        (self.root / '.github/release-request.json').write_text(json.dumps(payload))
+
+    def test_valid(self):
+        self.write(self.valid)
+        with patch.dict(os.environ, self.trusted):
+            self.assertEqual(release_request(), '0.1.1')
+
+    def test_fail_closed_mismatches(self):
+        for data in [
+            {**self.valid, 'version': '0.1.2'},
+            {**self.valid, 'zcall': '=0.1.1'},
+            {**self.valid, 'crate': 'zcall'},
+            {**self.valid, 'publish': False},
+            {**self.valid, 'publish': 1},
+            {**self.valid, 'extra': True},
+            {'version': '0.1.1'},
+            ['zharness'],
+        ]:
+            with self.subTest(data=data), patch.dict(os.environ, self.trusted):
+                self.write(data)
+                with self.assertRaises(ValueError):
+                    release_request()
+
+    def test_wrong_origin(self):
+        self.write(self.valid)
+        for changes in [
+            {'GITHUB_REF': 'refs/heads/not-main'},
+            {'GITHUB_REPOSITORY': 'someone/zharness'},
+        ]:
+            with self.subTest(changes=changes), patch.dict(os.environ, {**self.trusted, **changes}):
+                with self.assertRaises(ValueError):
+                    release_request()
 
 
 if __name__ == '__main__':

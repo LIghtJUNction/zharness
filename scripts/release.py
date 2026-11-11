@@ -88,6 +88,28 @@ def preflight(version):
             raise ValueError('Pinned dependency is yanked')
 
 
+def release_request():
+    """Allow an explicit exact-version release only from trusted main."""
+    if os.environ.get('GITHUB_REF') != 'refs/heads/main':
+        raise ValueError('Release requests must originate on main')
+    if os.environ.get('GITHUB_REPOSITORY') != 'LIghtJUNction/zharness':
+        raise ValueError('Untrusted release repository')
+    data = json.loads((ROOT / '.github/release-request.json').read_text())
+    if not isinstance(data, dict) or set(data) != {'crate', 'version', 'zcall', 'publish'}:
+        raise ValueError('Release request has unexpected fields')
+    package = manifest()
+    expected = {
+        'crate': package['package']['name'],
+        'version': package['package']['version'],
+        'zcall': package['dependencies']['zcall']['version'],
+        'publish': True,
+    }
+    if data.get('publish') is not True or data != expected:
+        raise ValueError('Release request does not match the exact crate, version and dependency')
+    parse_version(data['version'])
+    return data['version']
+
+
 def apply_version(version):
     path = ROOT / 'Cargo.toml'
     current = manifest()['package']['version']
@@ -105,7 +127,8 @@ def apply_version(version):
 def main():
     command = sys.argv[1]
     if command == 'plan':
-        version = next_version(manifest()['package']['version'], os.environ.get('BUMP', 'patch'), os.environ.get('MANUAL_VERSION', ''))
+        version = (release_request() if os.environ.get('GITHUB_EVENT_NAME') == 'push'
+                   else next_version(manifest()['package']['version'], os.environ.get('BUMP', 'patch'), os.environ.get('MANUAL_VERSION', '')))
         if os.environ.get('PUBLISH') == 'true':
             preflight(version)
         print('Planned version:', version)
@@ -115,7 +138,11 @@ def main():
     elif command == 'apply':
         apply_version(os.environ['VERSION'])
     elif command == 'preflight':
+        if os.environ.get('GITHUB_EVENT_NAME') == 'push':
+            release_request()
         preflight(manifest()['package']['version'])
+    elif command == 'request':
+        print('Validated trusted release request:', release_request())
     else:
         raise ValueError('Unknown release command')
 
