@@ -147,6 +147,14 @@ impl<'a> Server<'a> {
         write_error(output, id_raw, -32601, b"method not found").map(Outcome::Response)
     }
 
+    fn write_server_meta(&self, w: &mut Writer<'_>) -> Result<(), Error> {
+        w.raw(b"\"_meta\":{\"io.modelcontextprotocol/serverInfo\":{\"name\":")?;
+        w.quoted(self.name.as_bytes())?;
+        w.raw(b",\"version\":")?;
+        w.quoted(self.version.as_bytes())?;
+        w.raw(b"}}")
+    }
+
     fn initialize(
         &self,
         input: &[u8],
@@ -223,7 +231,13 @@ impl<'a> Server<'a> {
             w.raw(tool.input_schema.as_bytes())?;
             w.raw(b"}")?;
         }
-        w.raw(b"]}}")?;
+        if modern {
+            w.raw(b"],\"ttlMs\":0,\"cacheScope\":\"private\",")?;
+            self.write_server_meta(&mut w)?;
+            w.raw(b"}}")?;
+        } else {
+            w.raw(b"]}}")?;
+        }
         Ok(w.len)
     }
 
@@ -275,6 +289,10 @@ impl<'a> Server<'a> {
         w.quoted(text)?;
         w.raw(b"}],\"isError\":")?;
         w.raw(if is_error { b"true" } else { b"false" })?;
+        if modern {
+            w.raw(b",")?;
+            self.write_server_meta(&mut w)?;
+        }
         w.raw(b"}}}")?;
         Ok(w.len)
     }
