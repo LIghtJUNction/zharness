@@ -1,20 +1,30 @@
-use zharness::tools::{Tool, ToolSet};
-
-static TOOLS: &[Tool<'static>] = &[
-    Tool {
-        name: "search",
-        description: "Search a knowledge source",
-        input_schema: r#"{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}"#,
-    },
-    Tool {
-        name: "clock",
-        description: "Read an application clock",
-        input_schema: r#"{"type":"object","properties":{}}"#,
-    },
-];
-
-fn main() -> Result<(), zharness::mcp::Error> {
-    let tools = ToolSet::new(TOOLS)?;
-    assert!(tools.get("search").is_some());
+use zharness::{
+    Tool, ToolSet,
+    tools::{FixedRegistry, Registry},
+    zcall::v1::TokenStorage,
+};
+fn main() -> Result<(), zharness::Error> {
+    let descriptors = [
+        Tool::new(
+            "fs.read",
+            "Read with application authorization",
+            r#"{"type":"object"}"#,
+        ),
+        Tool::new("math.add", "Add numbers", r#"{"type":"object"}"#),
+    ];
+    let tools = ToolSet::new(&descriptors)?;
+    let mut index = [0; 2];
+    let indexed = tools.indexed(&mut index)?;
+    assert!(indexed.get("math.add").is_some());
+    let mut slots = [None; 4];
+    let mut dynamic = FixedRegistry::new(&mut slots);
+    dynamic.insert(descriptors[0], &mut TokenStorage::<32>::new())?;
+    assert!(dynamic.find("fs.read").is_some());
+    println!(
+        "linear={}, index_bytes={}, fixed_bytes={}",
+        tools.len(),
+        indexed.memory_bytes(),
+        dynamic.memory_bytes()
+    );
     Ok(())
 }

@@ -1,92 +1,62 @@
 # zharness
 
-**Small, composable Rust building blocks for your own AI harness.**
+Small, caller-buffered building blocks for a developer-owned AI harness.
+The core is no_std and forbids unsafe Rust. Its only direct dependency is the
+published `zcall = 0.1.1`, with default features disabled.
 
-zharness depends on [zcall](https://github.com/LIghtJUNction/zcall) for the
-protocol-independent model-call contract. It adds MCP (Model Context Protocol)
-JSON-RPC primitives and a bounded tool registry/dispatcher. It is deliberately
-not a complete harness: no agent loop, model routing, conversation database,
-policy engine, scheduler, HTTP client, or opinionated runtime is included.
+MCP wire handling has been extracted to [zmcp](https://github.com/LIghtJUNction/zmcp).
+The application composes the two; neither library depends on the other.
+zharness does not implement an agent loop, network client, provider parser,
+authorization policy, scheduler or persistence.
 
-## Design
+## Components
 
-- **Atomic capabilities:** MCP message framing, JSON-RPC request/response
-  encoding, server initialization, tool listing, tool invocation and zcall
-  tool-event bridging are separate pieces.
-- **Caller-owned memory:** protocol operations use caller-provided input and
-  output slices. No internal unbounded buffers or hidden allocation.
-- **Bring your own transport:** stdio, HTTP, WebSocket and in-process transports
-  can drive the same MCP message API. The optional std feature only supplies
-  convenience I/O adapters.
-- **Bring your own execution:** tools are static descriptors plus a caller
-  implementation. zharness never executes arbitrary commands or grants
-  permissions on its own.
-- **zcall stays authoritative:** model request/response semantics and streaming
-  tool-call validation come from zcall. MCP tool schemas and execution are
-  separate.
+`tools` provides static and caller-owned fixed registries, optional sorted indexes,
+validated tool schemas and a synchronous executor contract. `validation` reuses
+zcall's public JSON parser and applies bounded string/integer policy. `bridge`
+adapts only zcall ToolReady events, retains calls in fixed storage when needed,
+checks arguments before dispatch and appends results through zcall's public API.
 
-## Dependency policy
-
-The published library has exactly one direct dependency: zcall = 0.1.1,
-with default features disabled. No async runtime, HTTP stack, serde, JSON
-framework, or platform-specific dependency is pulled in. The protocol core
-uses bounded slices and a small JSON scanner. std is an optional feature
-(default enabled for examples); --no-default-features builds the core without
-the standard library.
-
-## Quick start
-
-```toml
-[dependencies]
-zharness = "0.1"
+```rust
+use zharness::{Tool, ToolSet};
+static TOOLS: &[Tool<'static>] = &[
+    Tool::new("echo", "Return validated input", r#"{"type":"object"}"#),
+];
+let tools = ToolSet::new(TOOLS)?;
+assert!(tools.get("echo").is_some());
+# Ok::<(), zharness::Error>(())
 ```
 
-See:
-- [basic tool registry](examples/basic.rs)
-- [MCP stdio server](examples/mcp_stdio.rs)
-- [MCP protocol notes](docs/MCP.md)
-- [performance methodology](docs/PERFORMANCE.md)
-
-## Performance
-
-The target is microsecond-scale local dispatch for small MCP messages, not a
-blanket latency guarantee. Tool execution, transport, operating-system
-scheduling and model inference are outside the library's control. Run
-cargo bench on the target hardware before making performance claims.
-
-## Build
+## Run
 
 ```sh
-cargo test --all-targets --locked
-cargo test --no-default-features --lib --locked
-cargo fmt --all -- --check
-cargo clippy --all-targets --locked -- -D warnings
+cargo test --locked --all-targets
+cargo run --locked --example basic
+cargo run --locked --example tool_registry
+cargo run --locked --example tool_execution
+cargo run --locked --example zcall_bridge
+cargo bench --locked --bench dispatch
 ```
 
-License: MIT OR Apache-2.0.
+The bridge example constructs an initial request, consumes a real interleaved
+zcall SSE fixture in 17-byte chunks, retains two ToolReady calls, validates and
+executes them in reverse completion order, submits real IDs, and encodes the next
+request. No live credentials or provider requests are needed for the example.
 
+## Contracts
 
-## Examples
+JSON syntax is not authorization or JSON Schema conformance. Application policy
+must run before side effects. Arguments supplied to Executor are complete validated
+objects; a caller cannot construct that wrapper from arbitrary bytes. Business
+failures are retained ToolOutput values with is_error=true. Capacity errors never
+cause automatic execution retries. Partial or unrecognized model events are not
+converted into calls.
 
-The repository includes compiling examples for basic composition, static tool
-registration, synchronous execution, MCP message handling, stdio framing,
-custom transports and the borrowed zcall invocation view:
+Use linear lookup for small tables or an explicit caller-owned sorted index for
+larger tables. No hash map or allocation is introduced automatically. The library
+never allocates; test/benchmark fixture generation can use std outside the core.
 
-- examples/basic.rs
-- examples/tool_registry.rs
-- examples/tool_execution.rs
-- examples/mcp_server.rs
-- examples/mcp_stdio.rs
-- examples/custom_transport.rs
-- examples/zcall_bridge.rs
-
-Run them with `cargo run --example basic` (replace basic with the example
-name). The zcall bridge example demonstrates the public ReadyTool-to-Invocation
-view; it is not yet a full Session-to-RequestBuilder round trip.
-
-## Specification status
-
-The current MCP stable revision is 2026-07-28. The current server remains an
-early JSON-RPC tools subset and does not claim full conformance. See
-[docs/MCP.md](docs/MCP.md) for the exact protocol boundary and outstanding
-requirements.
+See [architecture](ARCHITECTURE.md), [tools](TOOLS.md), [bridge](ZCALL_BRIDGE.md),
+[security](SECURITY.md), [MCP extraction](docs/MCP.md) and
+[performance](PERFORMANCE.md). This is an unreleased candidate, not a claim of a
+completed production audit or a universal microsecond latency guarantee.

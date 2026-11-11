@@ -1,36 +1,21 @@
 # Architecture
 
-zharness is a Sans-I/O composition layer. It owns neither the agent loop nor
-application policy.
+The application owns its agent loop. zharness owns only local tool composition;
+zcall owns model formats, streaming aggregation, lifecycle and request encoding;
+zconv remains zcall's private protocol implementation dependency. MCP wire
+handling is a sibling library, zmcp, composed by the application.
 
-## Dependency direction
+The bridge's only entry from model streaming is EventData::ToolReady. ReadyTool
+already has complete object arguments. zharness applies its explicit resource and
+business policy before invoking an executor. Its validation pass reuses the public
+zcall Json API, not zconv internals and not a copied provider parser.
 
-zharness -> zcall -> zconv
+InvocationStorage is the scheduling boundary. Copy into it only when a call must
+outlive an event callback. Callback acceptance and execution are separate: a
+Control::Pause path must not execute a side effect. The application chooses which
+retained calls run concurrently and owns cancellation and retry policy.
 
-- zconv owns provider wire formats, parsing, conversion and its intermediate
-  representation.
-- zcall owns protocol-independent model requests, normalized stream events,
-  tool readiness and model-turn lifecycle.
-- zharness owns reusable harness-side boundaries: MCP messages, tool metadata,
-  bounded dispatch and adapters between public zcall events and user executors.
-- The application owns transport, credentials, retries, persistence, model
-  selection, authorization, scheduling and the agent loop.
-
-## Memory model
-
-Input, output, scratch and long-lived workspaces belong to the caller. Operations
-must either complete within those regions or return a capacity error. No global
-mutable state or implicit runtime is required.
-
-## Composition
-
-MCP and tool dispatch are optional, independent modules. An application may
-use the registry without MCP, or expose an MCP endpoint without using zcall.
-std is a convenience boundary, not a requirement of the protocol core.
-
-## Current limitations
-
-The initial repository is an early implementation, not yet the complete
-architecture described above. See docs/MCP.md. The zcall bridge currently
-exposes a borrowed invocation view; complete tool-result submission and
-RequestBuilder integration remain to be completed and tested.
+Completion retains the true tool-call ID and caller-owned output. Append it only
+after the assistant call exists in the next RequestBuilder history. Submit it to
+the Session only after the application has accepted the retained result. These
+are separate operations rather than an unsafe hidden distributed transaction.

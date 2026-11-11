@@ -3,12 +3,13 @@ name = "zharness"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.99.1"
-description = "Small, composable building blocks for AI harnesses with zcall and MCP"
+description = "Caller-buffered tool composition and model lifecycle bridges for zcall"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/LIghtJUNction/zharness"
 readme = "README.md"
-keywords = ["ai", "harness", "mcp", "tool-calling", "no-std"]
+keywords = ["ai", "harness", "tool-calling", "no-std"]
 categories = ["api-bindings", "development-tools"]
+include = ["src/**", "tests/**", "examples/**", "benches/**", "docs/**", "*.md", "LICENSE-*", "Cargo.toml", "Cargo.lock"]
 
 [dependencies]
 zcall = { version = "=0.1.1", default-features = false }
@@ -19,9 +20,11 @@ std = []
 
 [dev-dependencies]
 
+[build-dependencies]
+
 [workspace]
 members = ["."]
-exclude = ["comparison"]
+exclude = ["comparison", "integration"]
 
 [profile.release]
 lto = "thin"
@@ -30,7 +33,6 @@ codegen-units = 1
 [profile.bench]
 lto = "thin"
 codegen-units = 1
-
 
 [[bench]]
 name = "dispatch"

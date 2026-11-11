@@ -1,0 +1,13 @@
+[package]
+name = "zharness-mcp-composition"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.99.1"
+publish = false
+
+[dependencies]
+zharness = { path = "../..", default-features = false }
+zmcp = { path = "../../../zmcp", default-features = false }
+
+[workspace]
+members = ["."]
