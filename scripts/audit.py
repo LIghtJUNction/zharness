@@ -20,7 +20,7 @@ assert len(package['dependencies']) == 1
 assert package['dependencies'][0]['name'] == 'zcall'
 assert package['dependencies'][0]['req'] == '=0.1.2'
 assert not package['dependencies'][0]['uses_default_features']
-assert package['version'] == '0.1.1'
+assert package['version'] == manifest['package']['version']
 zcall = next(p for p in m['packages'] if p['name'] == 'zcall')
 zconv = next(p for p in m['packages'] if p['name'] == 'zconv')
 assert zcall['version'] == '0.1.2' and zconv['version'] == '0.2.2'

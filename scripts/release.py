@@ -127,7 +127,7 @@ def apply_version(version):
 def main():
     command = sys.argv[1]
     if command == 'plan':
-        version = (release_request() if os.environ.get('GITHUB_EVENT_NAME') == 'push'
+        version = (release_request() if os.environ.get('GITHUB_EVENT_NAME') == 'push' and os.environ.get('PUBLISH') == 'true'
                    else next_version(manifest()['package']['version'], os.environ.get('BUMP', 'patch'), os.environ.get('MANUAL_VERSION', '')))
         if os.environ.get('PUBLISH') == 'true':
             preflight(version)
