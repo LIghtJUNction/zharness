@@ -280,6 +280,9 @@ impl<'a> Server<'a> {
     }
 }
 
+/// Alias emphasizing the MCP server role in applications.
+pub type McpServer<'a> = Server<'a>;
+
 /// Extract the modern protocol version from params._meta. Missing metadata
 /// denotes the legacy era; malformed metadata is rejected.
 fn request_version(input: &[u8], root: json::Value) -> Result<Option<&[u8]>, Error> {
