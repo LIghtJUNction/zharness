@@ -15,15 +15,19 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: zharness
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
+          path: zharness
           persist-credentials: false
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: LIghtJUNction/zmcp
           ref: 010fb64b0c73e8775f2828eb220f5eb1128a3af4
-          path: integration/mcp/zmcp
+          path: zmcp
           persist-credentials: false
       - run: rustup toolchain install 1.99.1 --profile minimal --component clippy,rustfmt
       - run: cargo +1.99.1 run --locked --manifest-path integration/mcp/Cargo.toml
