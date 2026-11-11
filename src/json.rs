@@ -245,7 +245,7 @@ fn string_eq_ascii(token: &[u8], expected: &[u8]) -> bool {
         let mut byte = token[at];
         at += 1;
         if byte == b'\\' {
-            let Some(escape) = token.get(at).copied() else { return false; };
+            let Some(escape) = token.get(at).copied() else {\n                return false;\n            };
             at += 1;
             byte = match escape {
                 b'"' | b'\\' | b'/' => escape,
@@ -255,10 +255,10 @@ fn string_eq_ascii(token: &[u8], expected: &[u8]) -> bool {
                 b'r' => b'\r',
                 b't' => b'\t',
                 b'u' => {
-                    if at + 4 > end { return false; }
+                    if at + 4 > end {\n                        return false;\n                    }
                     let mut value = 0u16;
                     for _ in 0..4 {
-                        let Some(digit) = hex_value(token[at]) else { return false; };
+                        let Some(digit) = hex_value(token[at]) else {\n                            return false;\n                        };
                         value = (value << 4) | digit;
                         at += 1;
                     }
