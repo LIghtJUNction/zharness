@@ -227,6 +227,7 @@ impl<'a> Server<'a> {
         Ok(w.len)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn tools_call<E: Executor>(
         &self,
         input: &[u8],
