@@ -33,7 +33,7 @@ jobs:
       - name: Generate lockfile
         run: cargo generate-lockfile
       - name: Format
-        run: cargo fmt --all
+        run: rustfmt --edition 2024 --check src/json.rs
       - name: Clippy
         run: cargo clippy --all-targets --locked -- -D warnings
       - name: Tests
