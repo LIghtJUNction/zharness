@@ -3,6 +3,7 @@
 //! Caller-buffered harness primitives. Applications own I/O, permissions and scheduling.
 
 pub mod bridge;
+pub mod cluster;
 pub mod context;
 pub mod hooks;
 pub mod tools;
@@ -32,9 +33,7 @@ pub enum Error {
     Incompatible, LimitExceeded,
     Zcall(zcall::v1::Error),
 }
-impl From<zcall::v1::Error> for Error {
-    fn from(value: zcall::v1::Error) -> Self { Self::Zcall(value) }
-}
+impl From<zcall::v1::Error> for Error { fn from(value: zcall::v1::Error) -> Self { Self::Zcall(value) } }
 impl core::fmt::Display for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result { write!(f, "{self:?}") }
 }
