@@ -17,6 +17,7 @@ pub mod output;
 pub mod request;
 pub mod response;
 pub mod settings;
+pub mod skills;
 pub mod tools;
 pub mod turn;
 pub mod validation;
