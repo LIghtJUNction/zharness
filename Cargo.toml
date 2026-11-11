@@ -1,0 +1,32 @@
+[package]
+name = "zharness"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99.1"
+description = "Small, composable building blocks for AI harnesses with zcall and MCP"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/LIghtJUNction/zharness"
+readme = "README.md"
+keywords = ["ai", "harness", "mcp", "tool-calling", "no-std"]
+categories = ["api-bindings", "development-tools"]
+
+[dependencies]
+zcall = { version = "=0.1.1", default-features = false }
+
+[features]
+default = ["std"]
+std = []
+
+[dev-dependencies]
+
+[workspace]
+members = ["."]
+exclude = ["comparison"]
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+[profile.bench]
+lto = "thin"
+codegen-units = 1
