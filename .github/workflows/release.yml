@@ -86,7 +86,7 @@ jobs:
         run: cargo update --workspace
       - name: Verify
         run: |
-          cargo fmt --all
+          rustfmt --edition 2024 --check src/json.rs tests/core.rs
           cargo clippy --all-targets --locked -- -D warnings
           cargo test --all-targets --locked
           cargo test --release --all-targets --locked
