@@ -1,20 +1,20 @@
 # Security
 
-zharness is a low-level composition library. It is not a security boundary by
-itself.
+Never treat model output, syntactically valid JSON or a registered tool name as
+an authorization decision. Applications decide which tools may run and perform
+schema and business validation before side effects.
 
-- Tool calls from a model are untrusted input.
-- A complete JSON object is not proof that its fields satisfy an application's
-  schema or business rules.
-- The application must authorize every tool invocation and decide whether
-  human approval is required.
-- Executors must enforce their own resource, filesystem, network and time
-  limits.
-- Caller-provided buffers must be sized for explicit application limits.
-- Capacity errors must be handled; callers must not retry with unbounded growth.
-- Transport authentication, origin checks, HTTP header validation and process
-  isolation belong to the transport/application layer.
-- Do not log credentials, private tool arguments or sensitive tool results.
+ArgumentLimits caps JSON depth, input length, token count, object fields and decoded
+string size. Integer policy rejects out-of-range integer lexemes by default;
+turning it off preserves the exact original bytes rather than rounding. Error
+variants preserve scalar offsets and the underlying zcall error metadata.
 
-The parser's depth bound limits recursive JSON nesting. It does not replace
-message-size limits or application-level rate limiting.
+Prepare never executes a tool. InvocationStorage capacity failures preserve the
+previous call. Executor output bounds and UTF-8 are checked before exposing a
+Completion. Output-buffer exhaustion must not cause automatic retries of work
+that may already have side effects. Retain business failures as is_error results.
+
+ToolReady borrowing ends with the callback unless the application copies data.
+Use one caller-owned retention slot per concurrent call. Do not return Pause
+after executing an operation: zcall may replay that event. The provided example
+performs retention only in callbacks and executes after stream completion.

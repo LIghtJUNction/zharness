@@ -1,20 +1,38 @@
-#![cfg_attr(not(feature = "std"), no_std)]
+#![no_std]
 #![forbid(unsafe_code)]
-#![deny(missing_docs)]
-//! Small, composable primitives for building AI harnesses.
-//!
-//! zharness is not an agent runtime. It provides bounded MCP/JSON-RPC building
-//! blocks and bridges zcall's normalized tool events to caller-owned executors.
-//! Scheduling, model selection, transport policy, permissions and tool business
-//! logic remain the application's responsibility.
+//! Caller-buffered tool composition for zcall. MCP wire handling lives in zmcp.
+//! No agent loop, transport I/O, scheduling or authorization is performed here.
 
-mod json;
-pub mod mcp;
+pub mod bridge;
 pub mod tools;
-pub mod transport;
+pub mod validation;
 
-/// Re-export the model-call contract used by this crate.
 pub use zcall;
+pub use tools::{Executor, Tool, ToolOutput, ToolSet};
+pub use bridge::Invocation;
 
-/// Library version.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Local failures retain their category; underlying zcall offsets are preserved.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum Error {
+    InvalidTool,
+    DuplicateTool,
+    UnknownTool,
+    InvalidArguments { offset: usize },
+    StringLimit { offset: usize, limit: usize },
+    IntegerOverflow { offset: usize },
+    Capacity { needed: usize },
+    InvalidOutput,
+    Denied,
+    ExecutionFailed,
+    Zcall(zcall::v1::Error),
+}
+impl From<zcall::v1::Error> for Error {
+    fn from(value: zcall::v1::Error) -> Self { Self::Zcall(value) }
+}
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result { write!(f, "{self:?}") }
+}
+impl core::error::Error for Error {}

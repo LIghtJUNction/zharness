@@ -1,225 +1,82 @@
-use zharness::{
-    mcp::{Outcome, Server},
-    tools::{Executor, Tool, ToolSet},
-};
+use zharness::{Error, Executor, Invocation, Tool, ToolOutput, ToolSet, bridge::InvocationStorage, tools::{FixedRegistry, Registry}, validation::{ArgumentLimits, Arguments, ValidationPolicy}, zcall::v1::*};
 
-struct Echo;
-
-impl Executor for Echo {
-    fn execute(
-        &mut self,
-        _name: &str,
-        arguments: &[u8],
-        output: &mut [u8],
-    ) -> Result<usize, zharness::mcp::Error> {
-        if arguments.len() > output.len() {
-            return Err(zharness::mcp::Error::Capacity);
-        }
-        output[..arguments.len()].copy_from_slice(arguments);
-        Ok(arguments.len())
+const SCHEMA: &str = r#"{"type":"object"}"#;
+#[test]
+fn registry_variants_and_duplicates() {
+    let definitions = [Tool::new("z", "Z", SCHEMA), Tool::new("a", "A", SCHEMA)];
+    let tools = ToolSet::new(&definitions).unwrap();
+    let mut index = [0; 2]; let sorted = tools.indexed(&mut index).unwrap();
+    assert_eq!(tools.get("a").unwrap().description, sorted.get("a").unwrap().description);
+    assert!(sorted.get("missing").is_none());
+    assert!(tools.indexed(&mut []).is_err());
+    assert!(matches!(ToolSet::new(&[definitions[0], definitions[0]]), Err(Error::DuplicateTool)));
+    let mut storage = [None; 1]; let mut registry = FixedRegistry::new(&mut storage); let mut tokens = TokenStorage::<16>::new();
+    registry.insert(definitions[0], &mut tokens).unwrap();
+    assert!(registry.find("z").is_some());
+    assert_eq!(registry.insert(definitions[0], &mut tokens), Err(Error::DuplicateTool));
+    assert_eq!(registry.insert(definitions[1], &mut tokens), Err(Error::Capacity { needed: 2 }));
+    assert_eq!(registry.len(), 1);
+}
+#[test]
+fn argument_validation_reuses_zcall_and_limits_scalars() {
+    let mut t = TokenStorage::<64>::new();
+    for input in [b"{".as_slice(), b"[]", b"{\"x\":1,}", b"{\"x\":no}", b"{\"x\":1}garbage"] {
+        assert!(Arguments::parse(input, &mut t, ArgumentLimits::default()).is_err());
+    }
+    assert!(matches!(Arguments::parse(br#"{"n":18446744073709551616}"#, &mut t, ArgumentLimits::default()), Err(Error::IntegerOverflow { offset: 5 })));
+    Arguments::parse(br#"{"n":18446744073709551615,"m":-9223372036854775808}"#, &mut t, ArgumentLimits::default()).unwrap();
+    let short = ArgumentLimits { max_string_bytes: 2, ..ArgumentLimits::default() };
+    assert!(matches!(Arguments::parse(br#"{"s":"abc"}"#, &mut t, short), Err(Error::StringLimit { .. })));
+    assert!(matches!(Arguments::parse(br#"{"s":"\u0061\u0062\u0063"}"#, &mut t, short), Err(Error::StringLimit { .. })));
+    let limits = ArgumentLimits { json: Limits { max_depth: 1, ..Limits::default() }, ..ArgumentLimits::default() };
+    assert!(Arguments::parse(br#"{"a":{"b":1}}"#, &mut t, limits).is_err());
+}
+#[test]
+fn retain_is_transactional_and_preserves_true_id() {
+    let call = Invocation { call_id: "real-id", name: "echo", arguments: b"{}" };
+    let mut storage = InvocationStorage::<32>::new(); storage.store(call).unwrap();
+    assert_eq!(storage.view().unwrap().call_id, "real-id");
+    let large = Invocation { arguments: b"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", ..call };
+    assert!(storage.store(large).is_err());
+    assert_eq!(storage.view().unwrap().arguments, b"{}");
+    storage.clear(); assert!(storage.view().is_none());
+}
+struct Failing;
+impl Executor for Failing {
+    fn execute(&mut self, _: &str, _: Arguments<'_>, output: &mut [u8]) -> Result<ToolOutput, Error> {
+        output.get_mut(..4).ok_or(Error::Capacity { needed: 4 })?.copy_from_slice(b"fail");
+        Ok(ToolOutput::failure(4))
     }
 }
-
-static TOOLS: &[Tool<'static>] = &[Tool {
-    name: "echo",
-    description: "Return the arguments",
-    input_schema: r#"{"type":"object"}"#,
-}];
-
-#[test]
-fn registry_rejects_duplicate_names() {
-    let duplicate = [
-        TOOLS[0],
-        Tool {
-            name: "echo",
-            description: "duplicate",
-            input_schema: r#"{"type":"object"}"#,
-        },
-    ];
-    assert!(matches!(
-        ToolSet::new(&duplicate),
-        Err(zharness::mcp::Error::DuplicateTool)
-    ));
+struct Deny;
+impl ValidationPolicy for Deny {
+    fn validate(&mut self, _: &str, _: Arguments<'_>) -> Result<(), Error> { Err(Error::Denied) }
 }
-
 #[test]
-fn ping_is_a_json_rpc_response() {
-    let tools = ToolSet::new(TOOLS).unwrap();
-    let mut output = [0; 128];
-    let mut scratch = [0; 128];
-    let mut executor = Echo;
-    let outcome = Server::new("test", "0.1.0")
-        .handle(
-            br#"{"jsonrpc":"2.0","id":7,"method":"ping"}"#,
-            &mut output,
-            &mut scratch,
-            &tools,
-            &mut executor,
-        )
-        .unwrap();
-    let Outcome::Response(len) = outcome else {
-        panic!("expected response");
-    };
-    assert_eq!(&output[..len], br#"{"jsonrpc":"2.0","id":7,"result":{}}"#);
+fn failed_results_and_duplicate_submission_are_explicit() {
+    let definitions = [Tool::new("echo", "Echo", SCHEMA)]; let tools = ToolSet::new(&definitions).unwrap();
+    let call = Invocation { call_id: "c1", name: "echo", arguments: b"{}" };
+    let mut t = TokenStorage::<16>::new(); let prepared = call.prepare(&tools, &mut t, ArgumentLimits::default()).unwrap();
+    assert!(matches!(prepared.check(&mut Deny), Err(Error::Denied)));
+    let mut out = [0; 16]; let result = prepared.execute(&mut Failing, &mut out).unwrap(); assert!(result.is_error);
+    let mut records = RecordStorage::<8>::new();
+    let mut builder = RequestBuilder::new(Protocol::AnthropicMessages.into(), Presence::Value(Text::new("m")), &mut records).unwrap();
+    builder.message(Role::Assistant, &[prepared.content()]).unwrap(); let mut request = builder.finish();
+    result.append_to(&mut request).unwrap(); assert!(result.append_to(&mut request).is_err());
+    assert!(Invocation { name: "unknown", ..call }.prepare(&tools, &mut t, ArgumentLimits::default()).is_err());
+    assert!(Invocation { arguments: b"{", ..call }.prepare(&tools, &mut t, ArgumentLimits::default()).is_err());
 }
-
 #[test]
-fn malformed_json_is_rejected_before_dispatch() {
-    let tools = ToolSet::new(TOOLS).unwrap();
-    let mut output = [0; 128];
-    let mut scratch = [0; 128];
-    let mut executor = Echo;
-    let result = Server::new("test", "0.1.0").handle(
-        br#"{"jsonrpc":"2.0","id":1,"method":"ping","broken" 3}"#,
-        &mut output,
-        &mut scratch,
-        &tools,
-        &mut executor,
-    );
-    assert_eq!(result, Err(zharness::mcp::Error::InvalidJson));
+fn incomplete_stream_never_produces_an_invocation() {
+    let mut framing = [0; 1024]; let mut payload = [0; 1024]; let mut aggregate = [0; 1024]; let mut work = StreamWorkspace::<128, 32, 8>::new();
+    let mut session = Session::new(SessionConfig::new(Protocol::OpenAiChat.into()), &mut framing, &mut payload, &mut aggregate, &mut work).unwrap(); session.prepare().unwrap();
+    let full = include_bytes!("fixtures/interleaved.sse");
+    let first = full.windows(2).position(|w| w == b"\n\n").unwrap() + 2;
+    let mut ready = 0;
+    let step = session.step(&full[..first], true, |e| { if Invocation::from_event(e.data()).is_some() { ready += 1; } Control::Continue });
+    assert_eq!(step.consumed, first); assert_eq!(ready, 0);
 }
-
+#[path = "../examples/zcall_bridge.rs"]
+mod bridge_example;
 #[test]
-fn notification_does_not_emit_a_response() {
-    let tools = ToolSet::new(TOOLS).unwrap();
-    let mut output = [0; 128];
-    let mut scratch = [0; 128];
-    let mut executor = Echo;
-    let outcome = Server::new("test", "0.1.0")
-        .handle(
-            br#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
-            &mut output,
-            &mut scratch,
-            &tools,
-            &mut executor,
-        )
-        .unwrap();
-    assert_eq!(outcome, Outcome::Notification);
-}
-
-
-#[test]
-fn modern_discovery_advertises_current_revision() {
-    let tools = ToolSet::new(TOOLS).unwrap();
-    let mut output = [0; 512];
-    let mut scratch = [0; 128];
-    let mut executor = Echo;
-    let request = br#"{"jsonrpc":"2.0","id":"d","method":"server/discover","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"}}}"#;
-    let Outcome::Response(len) = Server::new("test", "0.1.0")
-        .handle(request, &mut output, &mut scratch, &tools, &mut executor)
-        .unwrap()
-    else {
-        panic!("expected discovery response");
-    };
-    let response = core::str::from_utf8(&output[..len]).unwrap();
-    assert!(response.contains("2026-07-28"));
-    assert!(response.contains(r#""resultType":"complete""#));
-}
-
-#[test]
-fn modern_tools_list_uses_complete_result_envelope() {
-    let tools = ToolSet::new(TOOLS).unwrap();
-    let mut output = [0; 512];
-    let mut scratch = [0; 128];
-    let mut executor = Echo;
-    let request = br#"{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"}}}"#;
-    let Outcome::Response(len) = Server::new("test", "0.1.0")
-        .handle(request, &mut output, &mut scratch, &tools, &mut executor)
-        .unwrap()
-    else {
-        panic!("expected list response");
-    };
-    let response = core::str::from_utf8(&output[..len]).unwrap();
-    assert!(response.contains(r#""resultType":"complete""#));
-    assert!(response.contains(r#""name":"echo""#));
-}
-
-#[test]
-fn malformed_schema_is_rejected() {
-    let invalid = [Tool {
-        name: "bad",
-        description: "invalid schema",
-        input_schema: r#"{"type": object}"#,
-    }];
-    assert!(matches!(
-        ToolSet::new(&invalid),
-        Err(zharness::mcp::Error::InvalidTool)
-    ));
-}
-
-
-#[test]
-fn line_decoder_handles_split_input_and_multiple_frames() {
-    let mut storage = [0u8; 32];
-    let mut decoder = zharness::transport::LineDecoder::new(&mut storage);
-    assert_eq!(decoder.push(b"{\"jsonrpc\":\"2.0\"").unwrap(), 16);
-    assert!(decoder.message().is_none());
-    assert_eq!(decoder.push(b"}\r\n{\"id\":2}\n").unwrap(), 3);
-    assert_eq!(decoder.message(), Some(&b"{\"jsonrpc\":\"2.0\"}"[..]));
-    decoder.consume().unwrap();
-    assert_eq!(decoder.push(b"{\"id\":2}\n").unwrap(), 9);
-    assert_eq!(decoder.message(), Some(&b"{\"id\":2}"[..]));
-    decoder.consume().unwrap();
-    assert_eq!(decoder.buffered_len(), 0);
-}
-
-#[test]
-fn line_decoder_capacity_error_does_not_consume_input() {
-    let mut storage = [0u8; 3];
-    let mut decoder = zharness::transport::LineDecoder::new(&mut storage);
-    assert_eq!(
-        decoder.push(b"four"),
-        Err(zharness::transport::TransportError::Capacity)
-    );
-    assert_eq!(decoder.buffered_len(), 0);
-}
-
-
-#[test]
-fn escaped_ascii_json_rpc_keys_are_decoded() {
-    let tools = ToolSet::new(TOOLS).unwrap();
-    let mut output = [0; 128];
-    let mut scratch = [0; 128];
-    let mut executor = Echo;
-    let request = br#"{"jsonrpc":"2.0","id":3,"\u006dethod":"ping"}"#;
-    let Outcome::Response(len) = Server::new("test", "0.1.0")
-        .handle(request, &mut output, &mut scratch, &tools, &mut executor)
-        .unwrap()
-    else {
-        panic!("expected response");
-    };
-    assert_eq!(&output[..len], br#"{"jsonrpc":"2.0","id":3,"result":{}}"#);
-}
-
-#[test]
-fn duplicate_decoded_json_rpc_keys_are_rejected() {
-    let tools = ToolSet::new(TOOLS).unwrap();
-    let mut output = [0; 128];
-    let mut scratch = [0; 128];
-    let mut executor = Echo;
-    let request = br#"{"jsonrpc":"2.0","id":3,"method":"ping","\u006dethod":"tools/list"}"#;
-    let result = Server::new("test", "0.1.0")
-        .handle(request, &mut output, &mut scratch, &tools, &mut executor);
-    assert_eq!(result, Err(zharness::mcp::Error::InvalidJson));
-}
-
-
-#[test]
-fn modern_tool_call_returns_text_result_and_server_metadata() {
-    let tools = ToolSet::new(TOOLS).unwrap();
-    let mut output = [0; 1024];
-    let mut scratch = [0; 128];
-    let mut executor = Echo;
-    let request = br#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"},"name":"echo","arguments":{"value":7}}}"#;
-    let Outcome::Response(len) = Server::new("test", "0.1.0")
-        .handle(request, &mut output, &mut scratch, &tools, &mut executor)
-        .unwrap()
-    else {
-        panic!("expected tool result");
-    };
-    let response = core::str::from_utf8(&output[..len]).unwrap();
-    assert!(response.contains(r#""isError":false"#));
-    assert!(response.contains(r#""value":7"#));
-    assert!(response.contains("io.modelcontextprotocol/serverInfo"));
-    assert!(response.ends_with("}}"));
-}
+fn real_interleaved_stream_and_next_turn() { bridge_example::main(); }
