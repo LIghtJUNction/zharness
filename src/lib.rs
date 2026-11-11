@@ -10,6 +10,7 @@ pub mod context;
 pub mod conversation;
 pub mod execution;
 pub mod hooks;
+#[doc = include_str!("../LIFECYCLE.md")]
 pub mod lifecycle;
 mod native_lifecycle;
 pub mod output;
@@ -38,6 +39,7 @@ pub enum Error {
     InvalidArguments { offset: usize },
     StringLimit { offset: usize, limit: usize },
     IntegerOverflow { offset: usize },
+    /// Units are bytes for byte buffers and slots for descriptor/queue storage.
     Capacity { needed: usize },
     InvalidOutput,
     Denied,

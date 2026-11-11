@@ -1,13 +1,17 @@
 # zharness
 
-Native, caller-buffered primitives for a developer-owned AI harness: context
-windows, model/tool turns, lifecycle hooks, tool-output processing and multi-agent
-coordination. The library is `no_std`, forbids unsafe code, and has one direct
-dependency: `zcall = "=0.1.2"`, with default features disabled.
+Caller-buffered primitives for developer-owned AI harnesses: context windows,
+model/tool turns, hooks, output transforms and multi-agent coordination. The core
+is `no_std`, forbids unsafe Rust and has one direct dependency:
+`zcall = "=0.1.2"` with default features disabled.
 
-Version 0.2.2 adds hooks around actual tool and command execution, including error
-observations. Version 0.2.1 introduced result transforms and the native modules.
-The older 0.1.1 package contains only the earlier tool registry/bridge.
+**Unreleased source additions after v0.2.2:** typed lifecycle channels plus native
+conversation, model-settings, send and response adapters. These new APIs are not
+in the published 0.2.2 crate. Use a verified source commit to evaluate them; the
+source update itself does not trigger registry publication. Existing 0.2.2 Hooks
+implementations and enum variants remain unchanged.
+
+For the previously published capabilities:
 
 ```toml
 [dependencies]
@@ -16,22 +20,46 @@ zharness = { version = "=0.2.2", default-features = false }
 
 ## Boundary
 
-The library maintains bounded state and returns actions. Your application performs
-I/O, chooses models, approves tools and schedules work. No background worker,
-HTTP client, automatic retry, tokenizer, summarizing model, database or distributed
-consensus implementation is started implicitly. MCP is developed independently
-in [zmcpio](https://github.com/LIghtJUNction/zmcpio); this repository has no MCP
-integration directory or sibling-repository CI dependency.
+The library maintains bounded state and returns actions. Your application owns
+I/O, model selection, authorization, scheduling and persistence. No HTTP client,
+background worker, retry engine, tokenizer, summarizing model or database is
+started implicitly. MCP is developed independently in
+[zmcpio](https://github.com/LIghtJUNction/zmcpio); this repository contains no MCP
+integration directory or cross-repository build dependency.
 
 | Module | Atomic capability |
 |---|---|
-| `context` | Grouped history, budgets, pinned instructions, eviction, explicit summaries, forks and zcall request construction |
-| `turn` | Model/tool action state machine, actual ToolReady retention, bounded rounds/calls, cancellation and out-of-order completions |
-| `hooks` | Ordered before gates and after/error observations, composed through tuples |
-| `execution`, `command` | Hooked actual tool/command adapter calls, preserved IDs/status and bounded output checks; no OS runtime |
-| `output` | Caller-buffered transform chains, UTF-8-safe text reduction and validated JSON minification |
+| `context` | Grouped history, budgets, pinned retention, eviction, explicit summaries, forks and zcall request construction |
+| `turn` | Model/tool actions, real ToolReady retention, bounded rounds/calls and out-of-order completion |
+| `hooks` | Existing native before/completion/error callbacks for tools, commands, results and coordination |
+| `lifecycle` | New independent typed Gate/Observer/Interceptor channels, correlation and paired operations |
+| `conversation`, `settings` | New gated message acceptance and committed model/reasoning/configuration changes |
+| `request`, `response` | New actual-send boundary and replay-aware real zcall event consumption/final reply acceptance |
+| `execution`, `command` | Hooked user executors, preserved IDs/status and bounded output checks; no OS runtime |
+| `output` | Caller-buffered text reduction and validated JSON minification |
 | `cluster` | Capability matching, task dependencies, leases, handoff, joins and bounded mailboxes |
-| `tools`, `validation`, `bridge` | Tool definitions, execution interfaces, argument validation and public zcall result APIs |
+| `tools`, `validation`, `bridge` | Tool definitions, argument policy and public zcall result APIs |
+
+## Grouped lifecycle hooks (unreleased)
+
+Use a small typed event rather than a hundred methods in one Hooks trait. The
+families are conversation, model, prompt, request, response, tool, context, agent,
+persistence and runtime. Gates decide; interceptors change copied candidates;
+observers record facts. Observers get payload metadata by default, with explicit
+content opt-in. Tuples compose statically; there is no global mutable registry.
+
+`Lifecycle::run` wraps an actual operation. `begin`/`finish` supports application-
+owned async work and out-of-order completion without an async runtime. Native
+adapters already cover user acceptance, message edits/deletes, model and reasoning
+changes, request building/sending, stream consumption and assistant finalization.
+Storage, routing, rate limits and other application-owned work use explicit wrappers,
+not fictitious automatic interception. See [LIFECYCLE.md](LIFECYCLE.md) for the full
+97-action matrix, compiled examples, privacy and failure/replay contracts.
+
+An accepted send is not provider receipt. A model turn ending in WaitingTools is
+not a final assistant reply. A paused stream event must be replayed before it is
+counted as accepted. ModelSettings records intent for future requests; provider
+capability checks and wire mappings still belong to the application and zcall.
 
 ## Context without an owned conversation heap
 
@@ -48,18 +76,17 @@ let mut context = Context::new(
     &mut slots,
     Budget { limit: 4096, reserved: 1024 },
 )?;
-// Illustrative caller estimates. Use the target model's tokenizer in production.
+// Caller estimates for illustration; use the target model's tokenizer in production.
 context.push(Group::new(0, &system, 16).pinned(), Overflow::Reject)?;
 context.push(Group::new(1, &user, 20), Overflow::EvictOldest)?;
 assert_eq!(context.tokens(), 36);
 # Ok::<(), zharness::Error>(())
 ```
 
-A group is one eviction/compaction unit. Keep an assistant's parallel tool calls
-and their results together. `fork_into` copies descriptors into another caller
-buffer; message data stays borrowed. `compact` accepts an application-generated
-summary and refuses to replace pinned groups. `Context::build` creates a request
-through public zcall APIs, including ID-checked tool results.
+Keep related calls/results in one Group. Eviction/compaction never splits a group.
+Forks copy descriptors, not borrowed content; explicit summaries come from the
+application. Context::build delegates protocol representation and checked tool
+results to zcall instead of creating another provider adapter.
 
 ## Drive a loop without surrendering control
 
@@ -70,33 +97,24 @@ let mut slots = [const { CallSlot::<1024>::new() }; 4];
 let mut flow = ToolLoop::new(7, &mut slots, LoopLimits::default());
 let mut hooks = NoHooks;
 assert_eq!(flow.next(&mut hooks)?, Action::CallModel { run: 7, round: 1 });
-// Feed real zcall events into flow.observe(...), then execute only tickets
-// returned by flow.next(...). No network call has occurred at this point.
+// The application has not sent a model request yet.
 assert_eq!(flow.next(&mut hooks)?, Action::Pending);
 # Ok::<(), zharness::Error>(())
 ```
 
-The controller accepts real zcall `ToolReady` events and waits for a successful
-`WaitingTools` terminal observation before scheduling tools. Multiple tickets may
-be issued and completed in any order. Retain outputs/history, acknowledge the
-zcall Session and call `commit_result`; only then can another model action be
-issued. This is a state machine, not an automatic network loop.
+Feed genuine zcall events to observe, then execute only approved Execute tickets.
+ToolReady is retained until WaitingTools is confirmed. Several tickets can finish
+out of order. Retain history/results, acknowledge the Session and commit each
+result explicitly before another model action is issued. No hidden loop performs
+network requests or retries side effects.
 
-## Execution before, after and failure
+## Execution and output processing
 
-`Prepared::execute_with_hooks` wraps the actual Executor call with before_execute,
-after_execute and execute_error. `Command::execute_with_hooks` similarly wraps a
-caller-supplied CommandExecutor using before_command, after_command and command_error.
-Neither wrapper executes a tool when its gate pauses or denies. Success observers
-receive validated output; errors remain errors and do not trigger an implicit retry.
-
-Command results keep separate stdout/stderr bytes and the exit status. A nonzero
-exit code is not silently converted to success. Applications supply their OS
-adapter and policy; commands are literal program/argument descriptors, not shell
-strings. The library does not globally intercept std::process or external commands.
-See [command contracts](COMMANDS.md) and [hook boundaries](HOOKS.md).
-
-## Reduce tool output before history commitment
+Prepared::execute_with_hooks and Command::execute_with_hooks gate actual user
+executors, distinct from scheduling or history commitment. Pause/deny does not
+invoke an adapter. Nonzero command exits and business tool errors retain their
+status; invalid output or adapter failures remain errors. The core does not spawn
+processes, interpret shell strings or enforce adapter timeouts.
 
 ```rust
 use zharness::{bridge::Completion, hooks::{HookResult, NoHooks}};
@@ -123,50 +141,33 @@ assert!(reduced.is_error);
 # Ok::<(), zharness::Error>(())
 ```
 
-Use reduced results in history before Session submission and loop completion.
-`before_result` can pause/deny processing and `after_result` observes validated
-text. Existing hook implementations keep working through default trait methods.
-`JsonMinify` validates with zcall before removing whitespace outside JSON strings;
-plain-text truncation is explicitly lossy and is not a JSON/token truncator.
-Custom schema-aware filters or asynchronous summaries remain application policy.
-See [output contracts](OUTPUT.md) for failure/retry and buffer-lifetime rules.
+Reduction preserves identity/status. Retry failed output processing with retained
+raw input, not by rerunning the tool. JsonMinify validates through zcall; text
+truncation is explicitly lossy and does not promise valid truncated JSON or exact
+token savings. Custom semantic summaries remain an application decision.
 
-## Run examples and benchmarks
+## Run from the source checkout
 
 ```sh
 cargo test --locked --all-targets
 cargo test --locked --doc
 python scripts/examples.py
-cargo run --locked --example context_window
+cargo run --locked --example conversation_hooks
 cargo run --locked --example tool_loop
-cargo run --locked --example hooks
-cargo run --locked --example agent_cluster
-cargo run --locked --example tool_output
 cargo run --locked --example command_hooks
 cargo bench --locked --benches
 ```
 
-`tool_loop` uses real zcall requests and recorded interleaved stream bytes;
-`agent_cluster` demonstrates dependency joins and mailboxes; `tool_output` shows
-explicit result filtering. `command_hooks` runs controlled real child processes,
-including a nonzero exit and output exceeding capture capacity. Its std/thread
-resources are application-owned, outside the no_std library. No credentials or
-remote model calls are required for these examples.
+The conversation example covers user approval, settings changes, real zcall
+request encoding, an in-memory send, recorded response parsing and explicit final
+persistence. Tool-loop tests cover real interleaved calls. Command hooks run
+controlled child processes on the host. No live provider credentials are required;
+these examples do not claim real network/model/database integration.
 
-## Contracts
-
-All proportional library storage comes from the caller. Capacity failures never
-silently expand buffers or replay external side effects. `memory_bytes` describes
-owned state and supplied storage, not borrowed payloads, process RSS or total
-thread stacks. Core operations allocate no heap memory; application tools/hooks
-and generic mailbox payload types can still allocate on their own.
-
-JSON syntax and capability bits are not permission grants or complete JSON Schema
-validation. Applications own business rules, authorization and safe retries.
-Agent leases reject stale board completions; they do not undo external work or
-provide cross-machine exactly-once execution. Give each run/board a fresh identity.
-
-See [architecture](ARCHITECTURE.md), [context](CONTEXT.md), [loop](HARNESS.md),
-[hooks](HOOKS.md), [commands](COMMANDS.md), [output](OUTPUT.md), [agents](AGENTS.md),
-[tools](TOOLS.md), [bridge](ZCALL_BRIDGE.md), [security](SECURITY.md), and
-[performance](PERFORMANCE.md).
+All proportional core storage is caller-owned. Generic callback code and adapters
+can independently allocate or cause side effects. Hooks are not a sandbox, IDs
+are not authentication, and leases do not provide external exactly-once execution.
+Read [architecture](ARCHITECTURE.md), [typed lifecycle](LIFECYCLE.md),
+[hook boundaries](HOOKS.md), [context](CONTEXT.md), [loop](HARNESS.md),
+[commands](COMMANDS.md), [output](OUTPUT.md), [agents](AGENTS.md),
+[security](SECURITY.md), and [performance](PERFORMANCE.md).

@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+- Add ten independent typed lifecycle families covering 97 explicit action labels:
+  conversation, model, prompt, request, response, tool, context, agent, persistence
+  and runtime. Separate Gate, Observer and copied-candidate Interceptor contracts.
+- Add correlated begin/finish receipts and actual-operation wrappers, ordered
+  tuple/reference forwarding, preserved failure outcomes and default payload redaction.
+- Add native conversation acceptance/edit/delete/start/close and model/reasoning/
+  route/options configuration boundaries with no mutation on pause/denial/failure.
+- Add an actual complete-message send wrapper and replay-aware zcall response
+  adapter distinguishing first visible text, turn termination and final assistant
+  acceptance. WaitingTools does not count as a final answer.
+- Add typed native Context build/budget/fork/compaction wrappers and safe user
+  payload interception; preserve every existing native Hooks method and enum.
+- Add a complete local conversation example, real Session pause/replay and privacy/
+  configuration tests, 13 allocation-counted lifecycle cases and raw test evidence.
+- Keep crate metadata at 0.2.2; these source-only additions are not published by
+  this update. No release request, direct dependency or MCP integration is changed.
+
 ## 0.2.2 — 2026-11-11
 
 - Add actual Executor entry-point hooks through Prepared::execute_with_hooks,
