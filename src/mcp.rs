@@ -31,6 +31,27 @@ pub enum Error {
     ToolFailed,
 }
 
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Self::InvalidJson => "invalid JSON",
+            Self::DepthLimit => "JSON depth limit exceeded",
+            Self::Capacity => "buffer capacity exceeded",
+            Self::InvalidTool => "invalid tool descriptor",
+            Self::DuplicateTool => "duplicate tool name",
+            Self::MethodNotFound => "method not found",
+            Self::InvalidParams => "invalid method parameters",
+            Self::UnknownTool => "unknown tool",
+            Self::ToolFailed => "tool execution failed",
+        };
+        f.write_str(message)
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for Error {}
+
 /// Outcome of handling one complete JSON-RPC message.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Outcome {
