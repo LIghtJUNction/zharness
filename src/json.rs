@@ -224,7 +224,59 @@ pub(crate) fn root(input: &[u8]) -> Result<Value, Error> {
     Ok(Value { start, end, kind })
 }
 
-/// Returns the value of an unescaped key. Duplicate occurrences are rejected.
+
+fn hex_value(byte: u8) -> Option<u16> {
+    match byte {
+        b'0'..=b'9' => Some((byte - b'0') as u16),
+        b'a'..=b'f' => Some((byte - b'a' + 10) as u16),
+        b'A'..=b'F' => Some((byte - b'A' + 10) as u16),
+        _ => None,
+    }
+}
+
+fn string_eq_ascii(token: &[u8], expected: &[u8]) -> bool {
+    if token.len() < 2 || token.first() != Some(&b'"') || token.last() != Some(&b'"') {
+        return false;
+    }
+    let mut at = 1;
+    let end = token.len() - 1;
+    let mut matched = 0;
+    while at < end {
+        let mut byte = token[at];
+        at += 1;
+        if byte == b'\\' {
+            let Some(escape) = token.get(at).copied() else { return false; };
+            at += 1;
+            byte = match escape {
+                b'"' | b'\\' | b'/' => escape,
+                b'b' => 8,
+                b'f' => 12,
+                b'n' => b'\\n',
+                b'r' => b'\\r',
+                b't' => b'\\t',
+                b'u' => {
+                    if at + 4 > end { return false; }
+                    let mut value = 0u16;
+                    for _ in 0..4 {
+                        let Some(digit) = hex_value(token[at]) else { return false; };
+                        value = (value << 4) | digit;
+                        at += 1;
+                    }
+                    if value > 0x7f { return false; }
+                    value as u8
+                }
+                _ => return false,
+            };
+        }
+        if expected.get(matched) != Some(&byte) {
+            return false;
+        }
+        matched += 1;
+    }
+    matched == expected.len()
+}
+
+/// Returns the value of a key. Duplicate decoded occurrences are rejected.
 pub(crate) fn field(
     input: &[u8],
     object: Value,
@@ -246,7 +298,7 @@ pub(crate) fn field(
         let key_start = parser.at;
         parser.string()?;
         let key_end = parser.at;
-        let raw = &input[key_start + 1..key_end - 1];
+        let key_token = &input[key_start..key_end];
         parser.skip_ws();
         if input.get(parser.at) != Some(&b':') {
             return Err(Error::InvalidJson);
@@ -260,7 +312,7 @@ pub(crate) fn field(
             end: parser.at,
             kind,
         };
-        if raw == key {
+        if string_eq_ascii(key_token, key) {
             if found.is_some() {
                 return Err(Error::InvalidJson);
             }
