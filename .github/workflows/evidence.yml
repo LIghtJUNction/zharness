@@ -29,7 +29,8 @@ jobs:
           } > "$RUNNER_TEMP/zharness-evidence/environment.txt"
           cargo bench --locked --bench dispatch > "$RUNNER_TEMP/zharness-evidence/benchmark.csv"
           cargo bench --locked --bench output > "$RUNNER_TEMP/zharness-evidence/output-benchmark.csv"
-          cat "$RUNNER_TEMP/zharness-evidence/output-benchmark.csv"
+          cargo bench --locked --bench execution > "$RUNNER_TEMP/zharness-evidence/execution-benchmark.csv"
+          cat "$RUNNER_TEMP/zharness-evidence/execution-benchmark.csv"
           git archive --format=tar.gz -o "$RUNNER_TEMP/zharness-evidence/source.tar.gz" HEAD
       - id: candidate
         env:
@@ -48,6 +49,7 @@ jobs:
           git add Cargo.toml Cargo.lock
           if ! git diff --cached --quiet; then git commit -m 'ci: validate unpublished candidate'; fi
           cargo test --locked --release --all-targets
+          python scripts/examples.py
           python scripts/audit.py
           cargo package --locked
           cargo publish --dry-run --locked
