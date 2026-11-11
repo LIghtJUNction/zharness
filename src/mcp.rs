@@ -293,7 +293,7 @@ impl<'a> Server<'a> {
             w.raw(b",")?;
             self.write_server_meta(&mut w)?;
         }
-        w.raw(b"}}}")?;
+        w.raw(b"}}")?;
         Ok(w.len)
     }
 }
