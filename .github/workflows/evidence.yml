@@ -38,6 +38,7 @@ jobs:
           git archive --format=tar.gz -o "$RUNNER_TEMP/zharness-evidence/source.tar.gz" HEAD
       - name: Preserve unmodified source test evidence
         run: |
+          set -euo pipefail
           cargo test --locked --lib --tests -- --test-threads=1 | tee "$RUNNER_TEMP/zharness-evidence/tests.txt"
           cargo test --locked --doc | tee "$RUNNER_TEMP/zharness-evidence/doctests.txt"
           python scripts/examples.py

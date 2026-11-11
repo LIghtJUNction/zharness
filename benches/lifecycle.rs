@@ -51,7 +51,7 @@ fn main() {
     });
     measure("lifecycle_split_finish", 0, hooks.memory_bytes(), || {
         let HookResult::Applied(mut span) = hooks.begin(IDS, request::Event::new(request::Action::Send)).unwrap() else { panic!() };
-        black_box(&span); hooks.finish(&mut span, Outcome::Succeeded).unwrap(); black_box(span);
+        black_box(&span); hooks.finish(&mut span, Outcome::Succeeded).unwrap(); let _ = black_box(span);
     });
     let HookResult::Applied(mut settings) = ModelSettings::select(IDS, model::Configuration::new("a"), &mut bare).unwrap() else { panic!() };
     let mut second = false;
