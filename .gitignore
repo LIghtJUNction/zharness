@@ -1,6 +1,3 @@
 /target/
 /comparison/target/
-/integration/target/
-/integration/mcp/target/
-/integration/mcp/zmcp/
 /scripts/__pycache__/

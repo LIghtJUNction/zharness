@@ -1,13 +1,13 @@
 [package]
 name = "zharness"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.99.1"
-description = "Caller-buffered tool composition and model lifecycle bridges for zcall"
+description = "Caller-buffered context, tool-loop, hook and multi-agent harness primitives"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/LIghtJUNction/zharness"
 readme = "README.md"
-keywords = ["ai", "harness", "tool-calling", "no-std"]
+keywords = ["ai", "harness", "tool-calling", "agents", "no-std"]
 categories = ["api-bindings", "development-tools"]
 include = ["src/**", "tests/**", "examples/**", "benches/**", "docs/**", "*.md", "LICENSE-*", "Cargo.toml", "Cargo.lock"]
 
@@ -24,7 +24,7 @@ std = []
 
 [workspace]
 members = ["."]
-exclude = ["comparison", "integration"]
+exclude = ["comparison"]
 
 [profile.release]
 lto = "thin"

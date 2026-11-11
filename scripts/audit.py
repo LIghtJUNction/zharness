@@ -1,4 +1,4 @@
-"""Fail closed on any additional published-crate dependency or source override."""
+"""Fail closed on extra dependencies, source overrides or sibling-repository coupling."""
 import json
 import pathlib
 import subprocess
@@ -7,12 +7,17 @@ import tomllib
 root = pathlib.Path(__file__).resolve().parents[1]
 manifest = tomllib.loads((root / 'Cargo.toml').read_text())
 assert not (root / 'build.rs').exists(), 'build.rs is forbidden'
+assert not (root / 'integration').exists(), 'MCP integration belongs to its own repository'
 assert list(manifest.get('dependencies', {})) == ['zcall']
 dep = manifest['dependencies']['zcall']
 assert dep['version'] == '=0.1.2' and dep.get('default-features') is False
 assert not any(k in dep for k in ('path', 'git', 'optional'))
 assert not manifest.get('dev-dependencies') and not manifest.get('build-dependencies')
 assert not manifest.get('target'), 'target-specific dependency sections require review'
+for workflow in (root / '.github/workflows').glob('*.yml'):
+    content = workflow.read_text()
+    assert 'integration/mcp' not in content, workflow.name
+    assert 'repository: LIghtJUNction/zmcp' not in content, workflow.name
 m = json.loads(subprocess.check_output(['cargo', 'metadata', '--locked', '--format-version', '1'], cwd=root))
 assert {p['name'] for p in m['packages']} == {'zharness', 'zcall', 'zconv'}
 package = next(p for p in m['packages'] if p['name'] == 'zharness')
@@ -27,4 +32,4 @@ assert zcall['version'] == '0.1.2' and zconv['version'] == '0.2.2'
 for package in m['packages']:
     if package['name'] != 'zharness':
         assert package['source'] == 'registry+https://github.com/rust-lang/crates.io-index'
-print('Dependency audit passed: zharness -> zcall 0.1.1 -> zconv 0.2.2')
+print(f"Dependency audit passed: zharness {manifest['package']['version']} -> zcall {zcall['version']} -> zconv {zconv['version']}")

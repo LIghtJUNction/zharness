@@ -1,0 +1,6 @@
+data: {"id":"response_final","model":"model-x","created":10,"choices":[{"index":0,"delta":{"role":"assistant","content":"done"},"finish_reason":null}]}
+
+data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: [DONE]
+

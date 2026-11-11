@@ -1,4 +1,4 @@
-//! Reproducible lookup and prepare/execute microbenchmarks; setup is excluded.
+//! Reproducible component benchmarks; fixture setup is excluded.
 use std::{
     alloc::{GlobalAlloc, Layout, System},
     hint::black_box,
@@ -10,12 +10,12 @@ use zharness::{
     validation::{ArgumentLimits, Arguments},
     zcall::v1::TokenStorage,
 };
+mod native;
 
 struct CountingAllocator;
 static ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);
-// SAFETY: every operation delegates the identical pointer/layout/size to System.
-// No ownership or alignment transformation occurs. This is benchmark-only code;
-// the published library forbids unsafe Rust and contains no allocator.
+// SAFETY: all pointers, layouts and sizes are forwarded unchanged to System.
+// This allocator exists only in the benchmark binary; the library forbids unsafe.
 unsafe impl GlobalAlloc for CountingAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
@@ -129,12 +129,17 @@ fn main() {
         let mut tokens = TokenStorage::<32>::new();
         let mut output = vec![0; size];
         let mut echo = Echo;
-        let memory = tokens.memory_bytes() + output.len();
-        measure("prepare_execute", size, memory, || {
-            let prepared = call
-                .prepare(&tools, &mut tokens, ArgumentLimits::default())
-                .unwrap();
-            black_box(prepared.execute(&mut echo, &mut output).unwrap().text.len());
-        });
+        measure(
+            "prepare_execute",
+            size,
+            tokens.memory_bytes() + output.len(),
+            || {
+                let prepared = call
+                    .prepare(&tools, &mut tokens, ArgumentLimits::default())
+                    .unwrap();
+                black_box(prepared.execute(&mut echo, &mut output).unwrap().text.len());
+            },
+        );
     }
+    native::run();
 }
