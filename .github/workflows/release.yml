@@ -50,7 +50,7 @@ jobs:
           if requested:
               version = requested
           else:
-              match = re.fullmatch(r"(0|[1-9]\d*)\\.(0|[1-9]\d*)\\.(0|[1-9]\d*)", current)
+              match = re.fullmatch(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)", current)
               if not match:
                   raise SystemExit(f"Current version is not plain SemVer: {current}")
               major, minor, patch = map(int, match.groups())
@@ -60,7 +60,7 @@ jobs:
               elif bump == "major": major += 1; minor = patch = 0
               else: raise SystemExit(f"Invalid bump: {bump}")
               version = f"{major}.{minor}.{patch}"
-          if not re.fullmatch(r"(0|[1-9]\d*)\\.(0|[1-9]\d*)\\.(0|[1-9]\d*)", version):
+          if not re.fullmatch(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)", version):
               raise SystemExit(f"Invalid release version: {version}")
           if version == current:
               raise SystemExit("Release version must differ from current version")
