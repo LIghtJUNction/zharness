@@ -1,0 +1,41 @@
+name: Format extraction branch
+on:
+  push:
+    branches: [feat/extract-zmcp]
+    paths: ['.github/workflows/format-extraction.yml']
+permissions:
+  contents: write
+  actions: write
+concurrency:
+  group: format-extraction
+  cancel-in-progress: false
+jobs:
+  format:
+    if: github.repository == 'LIghtJUNction/zharness' && github.ref == 'refs/heads/feat/extract-zmcp'
+    runs-on: ubuntu-latest
+    env:
+      ZHARNESS_BENCH_SMOKE: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: feat/extract-zmcp
+      - run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt,clippy
+      - name: Format and verify actual published dependencies
+        run: |
+          cargo +1.99.1 fmt --all
+          cargo +1.99.1 test --locked --all-targets
+          cargo +1.99.1 clippy --locked --all-targets -- -D warnings
+          python scripts/audit.py
+      - name: Commit without replacing concurrent changes
+        run: |
+          if ! git diff --quiet; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add '*.rs'
+            git commit -m 'style: format validated extraction sources'
+            git push origin HEAD:feat/extract-zmcp
+          fi
+      - name: Explicitly test the formatted head
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run ci.yml --ref feat/extract-zmcp

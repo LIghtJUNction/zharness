@@ -1,9 +1,11 @@
 # Changelog
 
-## Unreleased
+## Unreleased — 0.1.0 candidate
 
-- Replace the permissive JSON structure scanner with a bounded grammar
-  validator for objects, arrays, strings, numbers and literals.
-- Add initial registry and JSON-RPC tests.
-- Add cross-platform CI and a manually triggered crates.io release workflow.
-- Document that the current implementation is not yet MCP 2026-07-28 complete.
+- Extract MCP protocol and transport handling to independent zmcp.
+- Preserve zcall 0.1.1 as the sole direct published dependency.
+- Add bounded static/fixed registries and optional caller-owned sorted indexes.
+- Reuse zcall JSON validation with explicit string/integer resource policy.
+- Add ToolReady retention, validated execution, failed results and result submission.
+- Execute the real interleaved bridge example as an integration test.
+- Strengthen dependency, no_std, WASM, package and benchmark validation.
