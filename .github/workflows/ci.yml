@@ -41,13 +41,7 @@ jobs:
       - name: Release tests
         run: cargo test --release --all-targets --locked
       - name: Run examples
-        run: |
-          python3 - <<'PY'
-          import subprocess
-          for name in ["basic", "tool_registry", "tool_execution", "mcp_server", "custom_transport", "zcall_bridge"]:
-              subprocess.run(["cargo", "run", "--example", name, "--locked"], check=True)
-          subprocess.run(["cargo", "run", "--example", "mcp_stdio", "--locked"], input=b"", check=True)
-          PY
+        run: python -c "import subprocess; names=['basic','tool_registry','tool_execution','mcp_server','custom_transport','zcall_bridge']; [subprocess.run(['cargo','run','--example',n,'--locked'],check=True) for n in names]; subprocess.run(['cargo','run','--example','mcp_stdio','--locked'],input=b'',check=True)"
       - name: no_std check
         run: cargo check --no-default-features --locked
       - name: WASM no_std check
