@@ -5,7 +5,7 @@ are untrusted. Registered names, valid JSON, pinned context and capability bits
 are not authorization decisions. The application validates schema/business rules
 and approves dangerous operations at the actual execution boundary.
 
-The library core is no_std and forbids unsafe code. It uses caller-owned fixed buffers
+The library core is no_std and forbids handwritten unsafe code. It uses caller-owned fixed buffers
 and borrowed data, not hidden growing caches. Configure token, byte, object-field,
 string, depth, group, tool-call, round and task limits for the application. Core
 capacity failures do not automatically allocate or retry effects. Generic hooks,
@@ -19,6 +19,18 @@ parent traversal and resolved symlink escape from the selected skill directory.
 These path checks assume a trusted local filesystem; they do not isolate hostile
 concurrent mutations. Skill instructions and optional frontmatter such as
 allowed-tools never grant execution permissions by themselves.
+
+Native plugin loading is an explicit unsafe operation through zplugin's loader.
+Library initializers execute before interface binding, so trust applies to the
+entire native image and its dependencies. zplugin's generated FFI and runtime
+implement the unsafe boundary; checked byte lengths do not sandbox native code.
+Proxies retain their library borrow, remain on their creating thread and use
+mutable access for calls. The default loader policy pins code until process exit.
+Cooperative unloading additionally requires the plugin's UnloadSafe contract.
+Plugin errors retain their original status; discard partial output after errors
+and never automatically retry side effects to obtain a larger buffer. The
+Executor bridge preserves the caller's tool registry and hook decisions; native
+code itself runs with the host process's privileges.
 
 Context token counts are supplied by the application and may be estimates. Reserve
 for output and request overhead, and recompute for the target model. An incorrect

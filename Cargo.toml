@@ -13,10 +13,11 @@ include = ["src/**", "tests/**", "examples/**", "benches/**", "docs/**", "*.md",
 
 [dependencies]
 zcall = { version = "=0.1.2", default-features = false }
+zplugin = { version = "=0.1.0", default-features = false, features = ["macros"] }
 
 [features]
 default = ["std"]
-std = []
+std = ["zplugin/std"]
 
 [dev-dependencies]
 
@@ -53,3 +54,25 @@ harness = false
 [[bench]]
 name = "skills"
 harness = false
+
+[[bench]]
+name = "plugins"
+harness = false
+required-features = ["std"]
+
+[[example]]
+name = "native_plugin"
+crate-type = ["cdylib"]
+test = false
+required-features = ["std"]
+
+[[example]]
+name = "plugin_fixture"
+path = "tests/fixtures/native_plugin.rs"
+crate-type = ["cdylib"]
+test = false
+required-features = ["std"]
+
+[[example]]
+name = "plugin_host"
+required-features = ["std"]

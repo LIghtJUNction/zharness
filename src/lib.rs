@@ -14,6 +14,8 @@ pub mod hooks;
 pub mod lifecycle;
 mod native_lifecycle;
 pub mod output;
+#[doc = include_str!("../PLUGINS.md")]
+pub mod plugin;
 pub mod request;
 pub mod response;
 pub mod settings;
@@ -28,6 +30,7 @@ pub use output::ToolResultTransform;
 pub use tools::{Executor, Tool, ToolOutput, ToolSet};
 pub use turn::ToolLoop;
 pub use zcall;
+pub use zplugin;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -71,10 +74,18 @@ pub enum Error {
     Incompatible,
     LimitExceeded,
     Zcall(zcall::v1::Error),
+    /// A native plugin failed to load, bind, create or execute. Preserve its
+    /// original status; a call failure does not imply side-effect rollback.
+    Plugin(zplugin::Error),
 }
 impl From<zcall::v1::Error> for Error {
     fn from(value: zcall::v1::Error) -> Self {
         Self::Zcall(value)
+    }
+}
+impl From<zplugin::Error> for Error {
+    fn from(value: zplugin::Error) -> Self {
+        Self::Plugin(value)
     }
 }
 impl core::fmt::Display for Error {

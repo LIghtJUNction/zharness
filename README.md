@@ -2,8 +2,11 @@
 
 Caller-buffered primitives for developer-owned AI harnesses: context windows,
 model/tool turns, hooks, output transforms and multi-agent coordination. The core
-is `no_std`, forbids unsafe Rust and has one direct dependency:
-`zcall = "=0.1.2"` with default features disabled.
+is `no_std`, forbids handwritten unsafe Rust and directly depends on
+`zcall = "=0.1.2"` and `zplugin = "=0.1.0"` with default features disabled.
+zplugin's official macro generates the native interface and introduces
+compilation-only parser dependencies; the runtime dependency graph stays within
+Project Z crates.
 
 Version 0.2.3 publishes typed lifecycle channels and native conversation,
 model-settings, request-send and response adapters. Existing 0.2.2 Hooks
@@ -38,12 +41,26 @@ integration directory or cross-repository build dependency.
 | `output` | Caller-buffered text reduction and validated JSON minification |
 | `cluster` | Capability matching, task dependencies, leases, handoff, joins and bounded mailboxes |
 | `skills` | Borrowed SKILL.md metadata, caller-buffered summaries, ordered directories and on-demand loading |
+| `plugin` | zplugin native loader, versioned byte-call interface, checked outputs and an Executor bridge |
 | `tools`, `validation`, `bridge` | Tool definitions, argument policy and public zcall result APIs |
+
+## Native extensions (source checkout)
+
+`plugin::Plugin` exposes zplugin's actual native loader. Load an explicitly chosen
+trusted library, create `ExtensionApi`'s typed proxy, then call operations with
+borrowed input and caller-owned output buffers. The same proxy implements
+`Executor`, so it works with the existing tool registry and execution hooks.
+
+The v1 extension interface has one operation: `call(operation, input, output)`.
+The library checks returned lengths and can validate UTF-8; the application owns
+operation semantics, payload schemas, scheduling, permissions and recovery.
+There is no automatic plugin scan, tool registration, execution or reload loop.
+See [PLUGINS.md](PLUGINS.md) for loading, plugin authoring, lifecycle and examples.
 
 ## Native skills (source checkout)
 
-The source checkout adds skill support for the next release. The published
-0.2.3 package above predates this module; use the repository to try it:
+The source checkout adds skills and native extensions for the next release. The
+published 0.2.3 package above predates these modules; use the repository to try them:
 
 ```toml
 [dependencies]
@@ -197,4 +214,5 @@ are not authentication, and leases do not provide external exactly-once executio
 Read [architecture](ARCHITECTURE.md), [typed lifecycle](LIFECYCLE.md),
 [hook boundaries](HOOKS.md), [context](CONTEXT.md), [loop](HARNESS.md),
 [commands](COMMANDS.md), [output](OUTPUT.md), [agents](AGENTS.md),
-[skills](SKILLS.md), [security](SECURITY.md), and [performance](PERFORMANCE.md).
+[skills](SKILLS.md), [plugins](PLUGINS.md), [security](SECURITY.md), and
+[performance](PERFORMANCE.md).
