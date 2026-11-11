@@ -224,7 +224,6 @@ pub(crate) fn root(input: &[u8]) -> Result<Value, Error> {
     Ok(Value { start, end, kind })
 }
 
-
 fn hex_value(byte: u8) -> Option<u16> {
     match byte {
         b'0'..=b'9' => Some((byte - b'0') as u16),
@@ -285,11 +284,7 @@ fn string_eq_ascii(token: &[u8], expected: &[u8]) -> bool {
 }
 
 /// Returns the value of a key. Duplicate decoded occurrences are rejected.
-pub(crate) fn field(
-    input: &[u8],
-    object: Value,
-    key: &[u8],
-) -> Result<Option<Value>, Error> {
+pub(crate) fn field(input: &[u8], object: Value, key: &[u8]) -> Result<Option<Value>, Error> {
     if object.kind != Kind::Object {
         return Err(Error::InvalidJson);
     }
