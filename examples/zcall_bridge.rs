@@ -36,7 +36,7 @@ fn dispatch_ready(
 
 fn main() -> Result<(), Error> {
     let tools = ToolSet::new(TOOLS)?;
-    let _dispatch = dispatch_ready;
+    let _dispatch: fn(ReadyTool<'_>, &ToolSet<'_>, &mut Dispatch, &mut [u8]) -> Result<usize, Error> =\n        dispatch_ready::<Dispatch>;
     let _tools = tools;
     let _executor = Dispatch;
     Ok(())
