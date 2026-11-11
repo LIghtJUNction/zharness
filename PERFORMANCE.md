@@ -2,7 +2,7 @@
 
 Run `cargo bench --locked --benches` on an otherwise idle machine. Record git
 revision, rustc -Vv, CPU, operating system and power policy. Native harness evidence
-retains source, environment, test logs and five raw benchmark CSV files. CI uses
+retains source, environment, test logs and six raw benchmark CSV files. CI uses
 ZHARNESS_BENCH_SMOKE=1 for correctness checks only; the full evidence step unsets it.
 
 Fixture construction, sample vectors and printing are outside timing. Benchmark-
@@ -57,3 +57,17 @@ body scan. Catalog timing includes validation/capacity preflight and output.
 All measured operations assert zero allocator calls. Filesystem discovery and
 activation allocate separately and are excluded from these core measurements.
 See [SKILLS.md](SKILLS.md) for reproduction and functional boundaries.
+
+## Native plugins
+
+`cargo bench --locked --bench plugins` builds and loads a real local dynamic
+library, then measures cached proxy calls, checked byte calls and the Executor
+bridge with and without execution hooks. Fixtures, compilation, loading, binding
+and object creation remain outside timing. The host allocator counter asserts
+zero measured host allocations; an independently linked plugin has its own
+allocator and is outside that counter. No startup-time or arbitrary plugin
+allocation claim is inferred from steady calls. The sample operation copies bytes;
+payload size and application work remain part of the measured call cost.
+
+See the [2026-11-12 measurement record](docs/PLUGINS-PERFORMANCE-2026-11-12.md)
+and its [raw CSV](docs/plugins-benchmark-2026-11-12.csv) for a recorded run.

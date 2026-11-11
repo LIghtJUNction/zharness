@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add zplugin =0.1.0 native loading, an explicitly versioned byte-call extension
+  interface and safe output bounds/UTF-8 checks. Its generated proxy implements
+  Executor and uses the existing execution hooks without a plugin runtime.
+- Preserve zplugin status errors and library/instance lifetimes; keep operation
+  semantics, tool registration, permissions, retries and reload policy caller-owned.
+- Keep handwritten code under forbid(unsafe_code); generate FFI through zplugin's
+  macro and audit compilation-only dependencies separately from the runtime graph.
 - Add borrowed SKILL.md metadata parsing and allocation-free, escaped XML
   summaries in the no_std core, without a new dependency.
 - Add explicit std discovery across project, global and arbitrary software

@@ -1,13 +1,15 @@
 # Release contract
 
-The 0.2.3 patch publishes the previously merged lifecycle Hook API on top of
-0.2.2 without changing existing Hooks methods or lifecycle enum variants. The
-exact production closure remains zharness -> zcall 0.1.2 -> zconv 0.2.2.
-No MCP workspace, command runtime or optional dependency is introduced.
+Published 0.2.3 contains lifecycle hooks. The source checkout additionally has
+skills and native extension primitives. The runtime closure is zharness ->
+zcall 0.1.2 -> zconv 0.2.2 and zharness -> zplugin 0.1.0. The dependency audit
+checks the zplugin macro's compilation graph separately. Native libraries used
+by tests/examples are built locally from packaged sources; no sibling repository
+checkout, MCP workspace or background runtime is required.
 
 Dispatch Release on the trusted default branch. Select patch/minor/major or an
-exact SemVer; manual publish defaults to false. To publish this already-bumped
-candidate, set version=0.2.3. Alternatively, update .github/release-request.json on
+exact SemVer; manual publish defaults to false. Select a new version above the
+current published release. Alternatively, update .github/release-request.json on
 main with the exact crate/version/zcall pin and publish=true. Old mismatched markers
 fail closed. Ordinary source/tag pushes never initiate registry publication.
 

@@ -61,8 +61,18 @@ none of those tasks. Native wrappers and explicitly application-wrapped boundari
 are enumerated separately in LIFECYCLE.md. Error propagation never implies rollback
 of external effects or permission for a blind retry. Panics are not caught.
 
-The dependency graph remains zharness -> zcall 0.1.2 -> zconv 0.2.2. Version 0.2.3 publishes these lifecycle primitives without adding a runtime or
-an MCP repository dependency.
+The runtime dependency graph is zharness -> zcall 0.1.2 -> zconv 0.2.2 plus
+zharness -> zplugin 0.1.0. zplugin-macros and its parsing dependencies run during
+compilation. There is no MCP repository dependency.
+
+Native extensions use zplugin's real loader and generated v1 interface. The
+interface passes an operation name, input bytes and caller output storage, with
+no prescribed payload format. ExtensionProxy checks output sizes and optionally
+UTF-8; its Executor implementation passes validated tool arguments unchanged.
+Prepared's existing execution hooks surround the actual native call. The proxy
+borrows its library, so object destruction precedes unloading. Trust decisions,
+operation meaning, tool registration, scheduling and reload policy are explicit
+host responsibilities. The core contains no handwritten FFI or unsafe block.
 
 Skills have a separate metadata and filesystem boundary. SkillMetadata borrows
 frontmatter and summary writers use caller buffers without alloc or I/O. The
