@@ -65,6 +65,7 @@ pub(super) fn run() {
             context.memory_bytes() + std::mem::size_of_val(fork_storage.as_slice()),
             || {
                 let fork = context.fork_into(&mut fork_storage).unwrap();
+                black_box(&fork);
                 black_box(fork.tokens());
             },
         );
@@ -114,6 +115,7 @@ pub(super) fn run() {
                         after: &[],
                     })
                     .unwrap();
+                black_box(&board);
             },
         );
         let mut slots = vec![None; count];
@@ -145,12 +147,14 @@ pub(super) fn run() {
             Decision::Allow
         );
         hooks.after(black_box(After::Stopped { run: 7 }));
+        black_box(&hooks);
     });
     let mut slots = [const { CallSlot::<256>::new() }; 4];
     let memory = ToolLoop::new(1, &mut slots, LoopLimits::default()).memory_bytes();
     measure("loop_start_cancel", 4, memory, || {
-        let mut flow = ToolLoop::new(1, &mut slots, LoopLimits::default());
-        let _ = black_box(flow.next(&mut NoHooks).unwrap());
-        assert!(flow.cancel(&mut NoHooks));
+        let mut flow = ToolLoop::new(black_box(1), &mut slots, LoopLimits::default());
+        let _ = black_box(black_box(&mut flow).next(&mut NoHooks).unwrap());
+        assert!(black_box(&mut flow).cancel(&mut NoHooks));
+        black_box(&flow);
     });
 }
