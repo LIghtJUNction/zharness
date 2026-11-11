@@ -373,8 +373,9 @@ fn summaries_are_utf8_escaped_and_capacity_failure_is_atomic() {
         "SECRET BODY MARKER\n",
     );
     let catalog = SkillPaths::new([temp.path("skills")]).discover();
-    let mut output = [0; 4096];
+    let mut output = vec![0; catalog.summary_len().unwrap()];
     let summary = catalog.write_summary(&mut output).unwrap();
+    assert_eq!(summary.len(), catalog.summary_len().unwrap());
     assert!(summary.starts_with("<available_skills>"));
     assert!(summary.contains("<name>review</name>"));
     assert!(summary.contains("分析 &lt;xml&gt; &amp; &quot;quotes&quot; safely."));

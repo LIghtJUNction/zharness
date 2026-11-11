@@ -2,7 +2,7 @@
 
 Run `cargo bench --locked --benches` on an otherwise idle machine. Record git
 revision, rustc -Vv, CPU, operating system and power policy. Native harness evidence
-retains source, environment, test logs and four raw benchmark CSV files. CI uses
+retains source, environment, test logs and five raw benchmark CSV files. CI uses
 ZHARNESS_BENCH_SMOKE=1 for correctness checks only; the full evidence step unsets it.
 
 Fixture construction, sample vectors and printing are outside timing. Benchmark-
@@ -46,3 +46,14 @@ bounded but size-dependent costs. Transform pipelines can require multiple scans
 and caller scratch. Event payload length computation may decode escaped text.
 No framework speedup, tokenizer savings, cancellation timer or universal latency
 guarantee is asserted. Historical reports apply only to their recorded revision.
+
+## Skill metadata and catalogs
+
+`cargo bench --locked --bench skills` measures borrowed parsing, normalized
+description rendering and complete escaped catalogs with 1, 16, 64 or 256 entries.
+Each parser fixture pairs a 256-byte header with the identical header followed
+by a 1 MiB body. Parsing stops at frontmatter; instruction size does not add a
+body scan. Catalog timing includes validation/capacity preflight and output.
+All measured operations assert zero allocator calls. Filesystem discovery and
+activation allocate separately and are excluded from these core measurements.
+See [SKILLS.md](SKILLS.md) for reproduction and functional boundaries.

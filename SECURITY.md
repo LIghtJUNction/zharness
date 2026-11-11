@@ -5,11 +5,20 @@ are untrusted. Registered names, valid JSON, pinned context and capability bits
 are not authorization decisions. The application validates schema/business rules
 and approves dangerous operations at the actual execution boundary.
 
-The library is no_std and forbids unsafe code. It uses caller-owned fixed buffers
+The library core is no_std and forbids unsafe code. It uses caller-owned fixed buffers
 and borrowed data, not hidden growing caches. Configure token, byte, object-field,
 string, depth, group, tool-call, round and task limits for the application. Core
 capacity failures do not automatically allocate or retry effects. Generic hooks,
 executors and payload types can independently allocate; audit those separately.
+
+The optional std skills adapter allocates bounded discovery state and reads local
+files only when called. Configure trusted roots and inspect discovery diagnostics.
+SKILLS_PATH can override project/global definitions, and discovered symlink roots
+can point outside their lexical parent. Resource reads reject absolute paths,
+parent traversal and resolved symlink escape from the selected skill directory.
+These path checks assume a trusted local filesystem; they do not isolate hostile
+concurrent mutations. Skill instructions and optional frontmatter such as
+allowed-tools never grant execution permissions by themselves.
 
 Context token counts are supplied by the application and may be estimates. Reserve
 for output and request overhead, and recompute for the target model. An incorrect

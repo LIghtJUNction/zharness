@@ -75,6 +75,7 @@ jobs:
       - run: cargo test --locked --all-targets --release
       - run: cargo test --locked --doc
       - run: cargo check --locked --no-default-features
+      - run: cargo run --locked --no-default-features --example skills
       - run: python scripts/audit.py
       - run: python scripts/examples.py
       - name: WASM

@@ -1,7 +1,7 @@
 //! Explicit filesystem and environment adapter; available with `std`.
 extern crate std;
 
-use super::{SkillError, SkillMetadata, SkillSummary, write_summaries};
+use super::{SkillError, SkillMetadata, SkillSummary, summaries_len, write_summaries};
 use std::{
     collections::{BTreeMap, BTreeSet},
     env,
@@ -206,6 +206,10 @@ impl SkillCatalog {
     /// Binary search over the index; no filesystem I/O or allocation.
     pub fn get(&self, name: &str) -> Option<&SkillEntry> {
         self.find(name).ok().map(|i| &self.skills[self.index[i]])
+    }
+    /// Exact caller-buffer capacity for the escaped catalog, without allocation.
+    pub fn summary_len(&self) -> Result<usize, SkillError> {
+        summaries_len(self.skills.iter().map(SkillEntry::summary))
     }
     /// Render the whole metadata catalog into caller storage, without I/O.
     pub fn write_summary<'o>(&self, output: &'o mut [u8]) -> Result<&'o str, SkillError> {

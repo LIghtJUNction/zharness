@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Add borrowed SKILL.md metadata parsing and allocation-free, escaped XML
+  summaries in the no_std core, without a new dependency.
+- Add explicit std discovery across project, global and arbitrary software
+  directories. SKILLS_PATH uses platform PATH syntax and left-to-right priority
+  before defaults; the first valid same-named skill wins.
+- Retain metadata only, with bounded on-demand body/resource loading, observable
+  shadow/error/limit diagnostics, deterministic traversal and symlink deduplication.
+- Add skill examples, parser/filesystem regressions and allocation-counted
+  benchmarks including identical headers with large bodies.
+
 ## 0.2.3 — 2026-11-11
 
 - Add ten independent typed lifecycle families covering 97 explicit action labels:
