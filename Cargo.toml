@@ -37,3 +37,7 @@ codegen-units = 1
 [[bench]]
 name = "dispatch"
 harness = false
+
+[[bench]]
+name = "output"
+harness = false
