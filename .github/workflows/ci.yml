@@ -41,5 +41,7 @@ jobs:
         run: cargo test --release --all-targets --locked
       - name: no_std check
         run: cargo check --no-default-features --locked
+      - name: Benchmark smoke
+        run: cargo bench --bench dispatch --no-run --locked
       - name: Package
         run: cargo package --locked --no-verify
