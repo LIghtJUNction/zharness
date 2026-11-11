@@ -1,6 +1,9 @@
 //! Tool argument validation delegates JSON grammar to zcall's public parser.
 //! The additional pass applies string-size and integer-range resource policy.
-use crate::{Error, zcall::v1::{Json, JsonKind, Limits, TokenStorage}};
+use crate::{
+    Error,
+    zcall::v1::{Json, JsonKind, Limits, TokenStorage},
+};
 
 #[derive(Clone, Copy, Debug)]
 pub struct ArgumentLimits {
@@ -12,22 +15,43 @@ pub struct ArgumentLimits {
 }
 impl Default for ArgumentLimits {
     fn default() -> Self {
-        Self { json: Limits { max_depth: 32, max_input: 1 << 20, max_tokens: 4096, max_object_fields: 256 }, max_string_bytes: 65536, bounded_integers: true }
+        Self {
+            json: Limits {
+                max_depth: 32,
+                max_input: 1 << 20,
+                max_tokens: 4096,
+                max_object_fields: 256,
+            },
+            max_string_bytes: 65536,
+            bounded_integers: true,
+        }
     }
 }
 
 /// A complete JSON object validated with explicit caller-selected limits.
 #[derive(Clone, Copy, Debug)]
-pub struct Arguments<'a> { json: Json<'a> }
+pub struct Arguments<'a> {
+    json: Json<'a>,
+}
 impl<'a> Arguments<'a> {
-    pub fn parse<const N: usize>(input: &'a [u8], tokens: &mut TokenStorage<N>, limits: ArgumentLimits) -> Result<Self, Error> {
+    pub fn parse<const N: usize>(
+        input: &'a [u8],
+        tokens: &mut TokenStorage<N>,
+        limits: ArgumentLimits,
+    ) -> Result<Self, Error> {
         let json = Json::parse(input, tokens, limits.json)?;
-        if json.kind() != JsonKind::Object { return Err(Error::InvalidArguments { offset: 0 }); }
+        if json.kind() != JsonKind::Object {
+            return Err(Error::InvalidArguments { offset: 0 });
+        }
         check_scalars(input, limits)?;
         Ok(Self { json })
     }
-    pub fn as_bytes(self) -> &'a [u8] { self.json.raw() }
-    pub fn json(self) -> Json<'a> { self.json }
+    pub fn as_bytes(self) -> &'a [u8] {
+        self.json.raw()
+    }
+    pub fn json(self) -> Json<'a> {
+        self.json
+    }
 }
 
 /// Application-defined schema/business checks. This is not a JSON Schema engine.
@@ -45,25 +69,53 @@ fn check_scalars(input: &[u8], limits: ArgumentLimits) -> Result<(), Error> {
             at += 1;
             let mut escaped = false;
             while input[at] != b'"' {
-                if input[at] == b'\\' { escaped = true; at += 2; } else { at += 1; }
+                if input[at] == b'\\' {
+                    escaped = true;
+                    at += 2;
+                } else {
+                    at += 1;
+                }
             }
             at += 1;
             let size = if escaped {
                 let mut scalar_tokens = TokenStorage::<1>::new();
                 let value = Json::parse(&input[start..at], &mut scalar_tokens, limits.json)?;
-                value.as_text().ok_or(Error::InvalidArguments { offset: start })?.decoded_len()
-            } else { at - start - 2 };
-            if size > limits.max_string_bytes { return Err(Error::StringLimit { offset: start, limit: limits.max_string_bytes }); }
+                value
+                    .as_text()
+                    .ok_or(Error::InvalidArguments { offset: start })?
+                    .decoded_len()
+            } else {
+                at - start - 2
+            };
+            if size > limits.max_string_bytes {
+                return Err(Error::StringLimit {
+                    offset: start,
+                    limit: limits.max_string_bytes,
+                });
+            }
         } else if input[at] == b'-' || input[at].is_ascii_digit() {
             let start = at;
-            while at < input.len() && matches!(input[at], b'-' | b'+' | b'.' | b'e' | b'E' | b'0'..=b'9') { at += 1; }
+            while at < input.len()
+                && matches!(input[at], b'-' | b'+' | b'.' | b'e' | b'E' | b'0'..=b'9')
+            {
+                at += 1;
+            }
             let raw = &input[start..at];
             if limits.bounded_integers && !raw.iter().any(|b| matches!(b, b'.' | b'e' | b'E')) {
-                let text = core::str::from_utf8(raw).map_err(|_| Error::InvalidArguments { offset: start })?;
-                let overflow = if raw[0] == b'-' { text.parse::<i64>().is_err() } else { text.parse::<u64>().is_err() };
-                if overflow { return Err(Error::IntegerOverflow { offset: start }); }
+                let text = core::str::from_utf8(raw)
+                    .map_err(|_| Error::InvalidArguments { offset: start })?;
+                let overflow = if raw[0] == b'-' {
+                    text.parse::<i64>().is_err()
+                } else {
+                    text.parse::<u64>().is_err()
+                };
+                if overflow {
+                    return Err(Error::IntegerOverflow { offset: start });
+                }
             }
-        } else { at += 1; }
+        } else {
+            at += 1;
+        }
     }
     Ok(())
 }

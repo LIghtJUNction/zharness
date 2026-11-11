@@ -7,9 +7,9 @@ pub mod bridge;
 pub mod tools;
 pub mod validation;
 
-pub use zcall;
-pub use tools::{Executor, Tool, ToolOutput, ToolSet};
 pub use bridge::Invocation;
+pub use tools::{Executor, Tool, ToolOutput, ToolSet};
+pub use zcall;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -30,9 +30,13 @@ pub enum Error {
     Zcall(zcall::v1::Error),
 }
 impl From<zcall::v1::Error> for Error {
-    fn from(value: zcall::v1::Error) -> Self { Self::Zcall(value) }
+    fn from(value: zcall::v1::Error) -> Self {
+        Self::Zcall(value)
+    }
 }
 impl core::fmt::Display for Error {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result { write!(f, "{self:?}") }
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{self:?}")
+    }
 }
 impl core::error::Error for Error {}
