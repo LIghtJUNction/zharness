@@ -18,7 +18,7 @@ pub(crate) struct Value {
 }
 
 impl Value {
-    pub fn bytes<'a>(self, input: &'a [u8]) -> &'a [u8] {
+    pub fn bytes(self, input: &[u8]) -> &[u8] {
         &input[self.start..self.end]
     }
 }
@@ -225,8 +225,8 @@ pub(crate) fn root(input: &[u8]) -> Result<Value, Error> {
 }
 
 /// Returns the value of an unescaped key. Duplicate occurrences are rejected.
-pub(crate) fn field<'a>(
-    input: &'a [u8],
+pub(crate) fn field(
+    input: &[u8],
     object: Value,
     key: &[u8],
 ) -> Result<Option<Value>, Error> {
@@ -279,7 +279,7 @@ pub(crate) fn field<'a>(
 }
 
 /// Returns an unescaped UTF-8 string slice. Escaped strings remain available via Value::bytes.
-pub(crate) fn string<'a>(input: &'a [u8], value: Value) -> Result<&'a [u8], Error> {
+pub(crate) fn string(input: &[u8], value: Value) -> Result<&[u8], Error> {
     if value.kind != Kind::String || input.get(value.start) != Some(&b'"') {
         return Err(Error::InvalidJson);
     }
