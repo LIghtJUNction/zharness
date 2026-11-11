@@ -7,10 +7,15 @@ pub mod cluster;
 #[doc = include_str!("../COMMANDS.md")]
 pub mod command;
 pub mod context;
+pub mod conversation;
 pub mod execution;
 pub mod hooks;
 pub mod lifecycle;
+mod native_lifecycle;
 pub mod output;
+pub mod request;
+pub mod response;
+pub mod settings;
 pub mod tools;
 pub mod turn;
 pub mod validation;
@@ -27,38 +32,19 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum Error {
-    InvalidTool,
-    DuplicateTool,
-    UnknownTool,
+    InvalidTool, DuplicateTool, UnknownTool,
     InvalidArguments { offset: usize },
     StringLimit { offset: usize, limit: usize },
     IntegerOverflow { offset: usize },
     Capacity { needed: usize },
-    InvalidOutput,
-    Denied,
-    ExecutionFailed,
-    InvalidState,
-    InvalidBudget,
+    InvalidOutput, Denied, ExecutionFailed, InvalidState, InvalidBudget,
     BudgetExceeded { needed: u64, available: u64 },
-    DuplicateId,
-    UnknownId,
-    InvalidRange,
-    Pinned,
-    Stale,
-    Overflow,
-    Busy,
-    Incompatible,
-    LimitExceeded,
+    DuplicateId, UnknownId, InvalidRange, Pinned, Stale, Overflow, Busy,
+    Incompatible, LimitExceeded,
     Zcall(zcall::v1::Error),
 }
-impl From<zcall::v1::Error> for Error {
-    fn from(value: zcall::v1::Error) -> Self {
-        Self::Zcall(value)
-    }
-}
+impl From<zcall::v1::Error> for Error { fn from(value: zcall::v1::Error) -> Self { Self::Zcall(value) } }
 impl core::fmt::Display for Error {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{self:?}")
-    }
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result { write!(f, "{self:?}") }
 }
 impl core::error::Error for Error {}
