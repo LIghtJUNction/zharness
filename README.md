@@ -64,3 +64,29 @@ cargo clippy --all-targets --locked -- -D warnings
 ```
 
 License: MIT OR Apache-2.0.
+
+
+## Examples
+
+The repository includes compiling examples for basic composition, static tool
+registration, synchronous execution, MCP message handling, stdio framing,
+custom transports and the borrowed zcall invocation view:
+
+- examples/basic.rs
+- examples/tool_registry.rs
+- examples/tool_execution.rs
+- examples/mcp_server.rs
+- examples/mcp_stdio.rs
+- examples/custom_transport.rs
+- examples/zcall_bridge.rs
+
+Run them with `cargo run --example basic` (replace basic with the example
+name). The zcall bridge example demonstrates the public ReadyTool-to-Invocation
+view; it is not yet a full Session-to-RequestBuilder round trip.
+
+## Specification status
+
+The current MCP stable revision is 2026-07-28. The current server remains an
+early JSON-RPC tools subset and does not claim full conformance. See
+[docs/MCP.md](docs/MCP.md) for the exact protocol boundary and outstanding
+requirements.
