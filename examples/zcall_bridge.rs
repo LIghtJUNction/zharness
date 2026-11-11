@@ -65,7 +65,15 @@ fn main() {
     .expect("session storage");
     session.prepare().expect("prepare model turn");
 
-    let mut ready = 0u8;
+    let mut ready = 0usize;
+    let mut call_ids = [[0u8; 32]; 2];
+    let mut call_id_lens = [0usize; 2];
+    let mut call_names = [[0u8; 32]; 2];
+    let mut call_name_lens = [0usize; 2];
+    let mut call_arguments = [[0u8; 128]; 2];
+    let mut call_argument_lens = [0usize; 2];
+    let mut results = [[0u8; 128]; 2];
+    let mut result_lens = [0usize; 2];
     let mut offset = 0usize;
     while offset < STREAM.len() {
         let end = (offset + 17).min(STREAM.len());
@@ -73,9 +81,26 @@ fn main() {
             if let EventData::ToolReady(tool) = event.data() {
                 let invocation = Invocation::from_zcall(tool);
                 assert!(tools.get(invocation.name).is_some());
-                executor
+                assert!(ready < 2);
+                let slot = ready;
+                let id = invocation.call_id.as_bytes();
+                let name = invocation.name.as_bytes();
+                assert!(id.len() <= call_ids[slot].len());
+                assert!(name.len() <= call_names[slot].len());
+                assert!(invocation.arguments.len() <= call_arguments[slot].len());
+                call_ids[slot][..id.len()].copy_from_slice(id);
+                call_id_lens[slot] = id.len();
+                call_names[slot][..name.len()].copy_from_slice(name);
+                call_name_lens[slot] = name.len();
+                call_arguments[slot][..invocation.arguments.len()]
+                    .copy_from_slice(invocation.arguments);
+                call_argument_lens[slot] = invocation.arguments.len();
+                let written = executor
                     .execute(invocation.name, invocation.arguments, &mut scratch)
                     .expect("execute authorized example tool");
+                assert!(written <= results[slot].len());
+                results[slot][..written].copy_from_slice(&scratch[..written]);
+                result_lens[slot] = written;
                 ready += 1;
             }
             Control::Continue
@@ -91,9 +116,20 @@ fn main() {
     assert_eq!(offset, STREAM.len());
     assert_eq!(ready, 2);
 
+    let call_id_a = core::str::from_utf8(&call_ids[0][..call_id_lens[0]]).unwrap();
+    let call_id_b = core::str::from_utf8(&call_ids[1][..call_id_lens[1]]).unwrap();
+    let call_name_a = core::str::from_utf8(&call_names[0][..call_name_lens[0]]).unwrap();
+    let call_name_b = core::str::from_utf8(&call_names[1][..call_name_lens[1]]).unwrap();
+    let call_args_a =
+        core::str::from_utf8(&call_arguments[0][..call_argument_lens[0]]).unwrap();
+    let call_args_b =
+        core::str::from_utf8(&call_arguments[1][..call_argument_lens[1]]).unwrap();
+    let result_a = core::str::from_utf8(&results[0][..result_lens[0]]).unwrap();
+    let result_b = core::str::from_utf8(&results[1][..result_lens[1]]).unwrap();
+
     // zcall validates that each result belongs to a completed ToolReady call.
-    session.submit_tool_result("call_a").expect("submit lookup result");
-    session.submit_tool_result("call_b").expect("submit save result");
+    session.submit_tool_result(call_id_a).expect("submit first tool result");
+    session.submit_tool_result(call_id_b).expect("submit second tool result");
 
     // Build the next turn from the assistant's original calls and their results.
     let mut records = RecordStorage::<16>::new();
@@ -105,15 +141,15 @@ fn main() {
     .expect("request storage");
     let calls = [
         Content::ToolCall {
-            id: Presence::Value(Text::new("call_a")),
-            name: Text::new("lookup"),
-            arguments: Data::JsonText(Text::new(r#"{"a":1}"#)),
+            id: Presence::Value(Text::new(call_id_a)),
+            name: Text::new(call_name_a),
+            arguments: Data::JsonText(Text::new(call_args_a)),
             legacy: false,
         },
         Content::ToolCall {
-            id: Presence::Value(Text::new("call_b")),
-            name: Text::new("save"),
-            arguments: Data::JsonText(Text::new(r#"{"b":2}"#)),
+            id: Presence::Value(Text::new(call_id_b)),
+            name: Text::new(call_name_b),
+            arguments: Data::JsonText(Text::new(call_args_b)),
             legacy: false,
         },
     ];
@@ -123,15 +159,15 @@ fn main() {
     let mut request = builder.finish();
     request
         .append_tool_result(
-            "call_a",
-            Data::Text(Text::new("lookup completed")),
+            call_id_a,
+            Data::Text(Text::new(result_a)),
             Presence::Missing,
         )
         .expect("append lookup result");
     request
         .append_tool_result(
-            "call_b",
-            Data::Text(Text::new("save completed")),
+            call_id_b,
+            Data::Text(Text::new(result_b)),
             Presence::Missing,
         )
         .expect("append save result");
