@@ -66,19 +66,29 @@ fn main() {
     session.prepare().expect("prepare model turn");
 
     let mut ready = 0u8;
-    let step = session.step(STREAM.as_bytes(), true, |event| {
-        if let EventData::ToolReady(tool) = event.data() {
-            let invocation = Invocation::from_zcall(tool);
-            assert!(tools.get(invocation.name).is_some());
-            executor
-                .execute(invocation.name, invocation.arguments, &mut scratch)
-                .expect("execute authorized example tool");
-            ready += 1;
+    let mut offset = 0usize;
+    while offset < STREAM.len() {
+        let end = (offset + 17).min(STREAM.len());
+        let step = session.step(&STREAM.as_bytes()[offset..end], end == STREAM.len(), |event| {
+            if let EventData::ToolReady(tool) = event.data() {
+                let invocation = Invocation::from_zcall(tool);
+                assert!(tools.get(invocation.name).is_some());
+                executor
+                    .execute(invocation.name, invocation.arguments, &mut scratch)
+                    .expect("execute authorized example tool");
+                ready += 1;
+            }
+            Control::Continue
+        });
+        offset += step.consumed;
+        match step.status {
+            StepStatus::NeedInput | StepStatus::NeedEvents => {}
+            StepStatus::Done => break,
+            StepStatus::NeedBuffer(_) => panic!("example workspace is too small"),
+            StepStatus::Failed(error) => panic!("stream failed: {error:?}"),
         }
-        Control::Continue
-    });
-    assert_eq!(step.consumed, STREAM.len());
-    assert!(matches!(step.status, StepStatus::Done));
+    }
+    assert_eq!(offset, STREAM.len());
     assert_eq!(ready, 2);
 
     // zcall validates that each result belongs to a completed ToolReady call.
