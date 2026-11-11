@@ -11,6 +11,7 @@
 mod json;
 pub mod mcp;
 pub mod tools;
+pub mod transport;
 
 /// Re-export the model-call contract used by this crate.
 pub use zcall;
