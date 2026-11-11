@@ -202,3 +202,24 @@ fn duplicate_decoded_json_rpc_keys_are_rejected() {
         .handle(request, &mut output, &mut scratch, &tools, &mut executor);
     assert_eq!(result, Err(zharness::mcp::Error::InvalidJson));
 }
+
+
+#[test]
+fn modern_tool_call_returns_text_result_and_server_metadata() {
+    let tools = ToolSet::new(TOOLS).unwrap();
+    let mut output = [0; 1024];
+    let mut scratch = [0; 128];
+    let mut executor = Echo;
+    let request = br#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"},"name":"echo","arguments":{"value":7}}}"#;
+    let Outcome::Response(len) = Server::new("test", "0.1.0")
+        .handle(request, &mut output, &mut scratch, &tools, &mut executor)
+        .unwrap()
+    else {
+        panic!("expected tool result");
+    };
+    let response = core::str::from_utf8(&output[..len]).unwrap();
+    assert!(response.contains(r#""isError":false"#));
+    assert!(response.contains(r#""value":7"#));
+    assert!(response.contains("io.modelcontextprotocol/serverInfo"));
+    assert!(response.ends_with("}}"));
+}
