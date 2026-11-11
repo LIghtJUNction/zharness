@@ -40,5 +40,5 @@ jobs:
           rustup target add wasm32-unknown-unknown
           cargo check --locked --target wasm32-unknown-unknown --no-default-features
       - run: python scripts/audit.py
-      - run: cargo bench --locked --bench dispatch
+      - run: cargo bench --locked --benches
       - run: cargo package --locked

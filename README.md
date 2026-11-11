@@ -1,13 +1,18 @@
 # zharness
 
 Native, caller-buffered primitives for a developer-owned AI harness: context
-windows, model/tool turns, lifecycle hooks and multi-agent coordination. The
-library is `no_std`, forbids unsafe code, and has one direct dependency:
-`zcall = "=0.1.2"`, with default features disabled.
+windows, model/tool turns, lifecycle hooks, tool-output processing and multi-agent
+coordination. The library is `no_std`, forbids unsafe code, and has one direct
+dependency: `zcall = "=0.1.2"`, with default features disabled.
 
-**Source version 0.2.0 is an unreleased candidate.** The published 0.1.1 package
-contains the earlier tool registry/bridge, not the new native modules described
-here. Updating the source version does not publish a crate.
+Version 0.2.1 adds output transforms to the native 0.2.0 source baseline. The
+previously published 0.1.1 package contains only the earlier registry/bridge;
+upgrading is required to use the native context, loop, cluster and result APIs.
+
+```toml
+[dependencies]
+zharness = { version = "=0.2.1", default-features = false }
+```
 
 ## Boundary
 
@@ -22,7 +27,8 @@ integration directory or sibling-repository CI dependency.
 |---|---|
 | `context` | Grouped history, budgets, pinned instructions, eviction, explicit summaries, forks and zcall request construction |
 | `turn` | Model/tool action state machine, actual ToolReady retention, bounded rounds/calls, cancellation and out-of-order completions |
-| `hooks` | Ordered before gates and after observers, composed through tuples |
+| `hooks` | Ordered before gates and after observers, including result processing, composed through tuples |
+| `output` | Caller-buffered transform chains, UTF-8-safe text reduction and validated JSON minification |
 | `cluster` | Capability matching, task dependencies, leases, handoff, joins and bounded mailboxes |
 | `tools`, `validation`, `bridge` | Tool definitions, execution interfaces, argument validation and public zcall result APIs |
 
@@ -63,8 +69,8 @@ let mut slots = [const { CallSlot::<1024>::new() }; 4];
 let mut flow = ToolLoop::new(7, &mut slots, LoopLimits::default());
 let mut hooks = NoHooks;
 assert_eq!(flow.next(&mut hooks)?, Action::CallModel { run: 7, round: 1 });
-// The application has not sent a model request yet. Feed real zcall events into
-// flow.observe(...), then execute only the tickets returned by flow.next(...).
+// Feed real zcall events into flow.observe(...), then execute only tickets
+// returned by flow.next(...). No network call has occurred at this point.
 assert_eq!(flow.next(&mut hooks)?, Action::Pending);
 # Ok::<(), zharness::Error>(())
 ```
@@ -75,11 +81,42 @@ be issued and completed in any order. Retain outputs/history, acknowledge the
 zcall Session and call `commit_result`; only then can another model action be
 issued. This is a state machine, not an automatic network loop.
 
-Hooks compose as `(audit, policy)`. `Allow`, `Pause` and `Deny` gate proposed
-actions before state changes. After observers cannot veto an already committed
-operation. A paused hook may run again and must not perform the proposed action.
+## Reduce tool output before history commitment
 
-## Run the source examples
+```rust
+use zharness::{bridge::Completion, hooks::{HookResult, NoHooks}};
+use zharness::output::{Chain, DedupAdjacentLines, Truncate};
+
+let original = Completion {
+    call_id: "real-call-id",
+    text: "error: missing config\nerror: missing config\n",
+    is_error: true,
+};
+let mut scratch = [0; 1024];
+let mut output = [0; 256];
+let mut pipeline = Chain::new(
+    DedupAdjacentLines,
+    Truncate::new(256, "\n...[truncated]")?,
+    &mut scratch,
+);
+let HookResult::Applied(reduced) = original.transform_with_hooks(
+    "build", &mut pipeline, &mut output, &mut NoHooks,
+)? else { unreachable!("NoHooks never pauses"); };
+assert_eq!(reduced.text, "error: missing config\n");
+assert_eq!(reduced.call_id, original.call_id);
+assert!(reduced.is_error);
+# Ok::<(), zharness::Error>(())
+```
+
+Use reduced results in history before Session submission and loop completion.
+`before_result` can pause/deny processing and `after_result` observes validated
+text. Existing hook implementations keep working through default trait methods.
+`JsonMinify` validates with zcall before removing whitespace outside JSON strings;
+plain-text truncation is explicitly lossy and is not a JSON/token truncator.
+Custom schema-aware filters or asynchronous summaries remain application policy.
+See [output contracts](OUTPUT.md) for failure/retry and buffer-lifetime rules.
+
+## Run examples and benchmarks
 
 ```sh
 cargo test --locked --all-targets
@@ -89,14 +126,16 @@ cargo run --locked --example context_window
 cargo run --locked --example tool_loop
 cargo run --locked --example hooks
 cargo run --locked --example agent_cluster
-cargo bench --locked --bench dispatch
+cargo run --locked --example tool_output
+cargo bench --locked --benches
 ```
 
 `tool_loop` encodes actual zcall requests, consumes interleaved fixture bytes in
 17-byte chunks, retains two real call IDs, completes tools in reverse order and
 builds the next model request from retained history. `agent_cluster` demonstrates
-two independent tasks, a dependency join and mailbox delivery. These examples
-run without network credentials; they do not claim to launch remote agents.
+two tasks, a dependency join and mailbox delivery. `tool_output` shows a custom
+log filter, reduction hooks and retained failure semantics. Examples run without
+network credentials; they do not claim to launch remote agents or summarizers.
 
 ## Contracts
 
@@ -112,5 +151,5 @@ Agent leases reject stale board completions; they do not undo external work or
 provide cross-machine exactly-once execution. Give each run/board a fresh identity.
 
 See [architecture](ARCHITECTURE.md), [context](CONTEXT.md), [loop](HARNESS.md),
-[hooks](HOOKS.md), [agents](AGENTS.md), [tools](TOOLS.md),
+[hooks](HOOKS.md), [output](OUTPUT.md), [agents](AGENTS.md), [tools](TOOLS.md),
 [bridge](ZCALL_BRIDGE.md), [security](SECURITY.md), and [performance](PERFORMANCE.md).

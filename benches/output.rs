@@ -1,6 +1,6 @@
 //! Full processing/validation measurements with allocation accounting.
 use std::{alloc::{GlobalAlloc, Layout, System}, hint::black_box, sync::atomic::{AtomicUsize, Ordering}, time::Instant};
-use zharness::{bridge::Completion, hooks::NoHooks, output::{Chain, DedupAdjacentLines, Identity, JsonMinify, Trim, Truncate}, zcall::v1::{Limits, TokenStorage}};
+use zharness::{bridge::Completion, hooks::{HookResult, NoHooks}, output::{Chain, DedupAdjacentLines, Identity, JsonMinify, Trim, Truncate}, zcall::v1::{Limits, TokenStorage}};
 struct Counter;
 static ALLOCS: AtomicUsize = AtomicUsize::new(0);
 // SAFETY: pointer/layout/size arguments are forwarded unchanged to System.
@@ -39,7 +39,8 @@ fn main() {
         measure("output_dedup", size, out.len(), || { let result = black_box(raw).transform("build", &mut DedupAdjacentLines, &mut out).unwrap(); black_box(result.text.as_bytes()); });
         let mut chain = Chain::new(Chain::new(DedupAdjacentLines, Trim, &mut a), Truncate::new(512, "\n...[truncated]").unwrap(), &mut b);
         measure("output_chain_hooks", size, out.len() + size * 2 + std::mem::size_of_val(&chain), || {
-            let result = black_box(raw).transform_with_hooks("build", &mut chain, &mut out, &mut NoHooks).unwrap(); black_box(result);
+            let HookResult::Applied(result) = black_box(raw).transform_with_hooks("build", &mut chain, &mut out, &mut NoHooks).unwrap() else { panic!("unexpected pause in no-op hook benchmark"); };
+            black_box(result.text.as_bytes());
         });
         let prefix = "{ \"x\" : \""; let suffix = "\" }";
         let json = format!("{prefix}{}{suffix}", "x".repeat(size - prefix.len() - suffix.len()));
