@@ -12,7 +12,12 @@ pub struct Tool<'a> {
     /// JSON Schema object encoded as UTF-8 JSON.
     pub input_schema: &'a str,
 }
-impl Tool<'_> {
+impl<'a> Tool<'a> {
+    /// Create a static tool descriptor.
+    pub const fn new(name: &'a str, description: &'a str, input_schema: &'a str) -> Self {
+        Self { name, description, input_schema }
+    }
+
     /// Validate the descriptor's basic wire constraints.
     pub fn validate(&self) -> Result<(), Error> {
         if self.name.is_empty() || self.name.len() > 128 || !self.name.is_ascii() || self.name.bytes().any(|b| b.is_ascii_control() || b == b' ') { return Err(Error::InvalidTool); }
