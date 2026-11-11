@@ -1,57 +1,75 @@
 # Lifecycle hooks
 
-Implement Hooks and pass the implementation into hooked operations. The library
-stores no global hooks. A tuple such as (audit, policy) composes different hook
-types without a required Box, dynamic trait object or allocation. Nested tuples
-extend the chain. The caller owns callback state and lifetime.
+Hooks are explicit, caller-owned control points, not a global interception
+mechanism. Use `(audit, policy)` or nested tuples to compose statically dispatched
+callbacks without mandatory allocation. Gates short-circuit left-to-right;
+normal-return observers all run in the same order and cannot veto results.
 
-Before events describe context changes, model actions, tool dispatches and agent
-assignments. Return Decision::Allow to permit the transition, Pause to defer it,
-or Deny to return Error::Denied. A tuple evaluates before hooks left-to-right
-and short-circuits at the first non-Allow result. Library state is not mutated
-before all participating gates allow the proposal.
+## Select the boundary
 
-After events observe committed context, model outcomes, tool results, stops,
-assignments, task completions, expired leases and cancellations. All tuple
-observers run in order and return no decision. A completed side effect must not
-be represented as a fresh retryable proposal just because an observer failed.
-Callbacks are application code: keep them bounded and do not panic across a
-boundary where partial application-side changes would be unsafe.
+| Boundary | Before gate | Completion observation | Attempt failure |
+|---|---|---|---|
+| Model/tool scheduling and context/agent state | before(Before) | after(After) | Caller handles the returned error |
+| Actual validated Executor call | before_execute | after_execute | execute_error |
+| Command adapter invocation | before_command | after_command | command_error |
+| Optional result reduction | before_result | after_result | Caller handles transform error; no after_result |
 
-## Tool-result processing hooks
+Before::Tool means a ToolLoop ticket is about to be issued, not that a process
+has started. After::ToolFinished means the application committed the loop result,
+not that an Executor has just returned. The added execution callbacks close that
+gap without changing the meanings or variants of existing lifecycle enums.
 
-Completion::transform_with_hooks adds a separate processing boundary after tool
-execution and before history/session commitment. before_result receives read-only
-ResultMeta (tool name, call ID, is_error) and original text. Pause leaves the raw
-result available and skips processing; Deny returns Error::Denied. A transform
-must return valid UTF-8 within caller output bounds before after_result sees it.
-The observer receives original byte length and processed text, but cannot veto.
+## Gate and observer rules
 
-These are default trait methods, not new variants in the existing Before/After
-enums. Existing Hooks implementations and exhaustive lifecycle-event matches keep
-compiling. Tuple and mutable-reference forwarding apply to the new methods too.
-After::ToolFinished retains its existing meaning: an accepted ToolLoop result.
-after_result means successful processing only; an explicit application retry may
-produce another processing observation before a single eventual loop commit.
+Allow permits the operation. Pause returns HookResult::Paused (or Action::Paused
+at the ToolLoop layer) without performing the proposed action. Deny returns the
+corresponding Denied error. In the execution wrappers, paused/denied calls leave
+output buffers unchanged, never invoke the adapter and produce no completion or
+attempt-failure callback. A before callback may therefore be evaluated again;
+it must not perform the action or assume it is observing a once-only attempt.
 
-Use ToolResultTransform for the actual text policy; use Chain with supplied scratch
-for multiple stages. No fallback to unfiltered raw output occurs on a chain error.
-The returned Completion preserves call ID and is_error. Read [OUTPUT.md](OUTPUT.md)
-for UTF-8, structured data, parallel buffers and semantic-safety contracts.
+After callbacks see committed state or validated output for their documented
+boundary. They cannot roll back side effects, replace return values or initiate
+implicit retries. Execution error observers receive the original error and cannot
+suppress it. Panics are not caught by the no_std library: guarantees about a final
+callback apply to normal Rust returns, not crashes or unwinding hook code.
 
-## Pause and authorization
+Tool business failures (ToolOutput::failure) are valid completed results, retaining
+is_error=true in after_execute. Command nonzero exit codes and signal-like
+termination are likewise observed through after_command with success()==false.
+Spawn/I/O/timeout/cancellation reports and invalid adapter output are distinct
+command_error paths. No helper creates a timeout timer or kills a process itself.
 
-Pause may cause the same before event to be evaluated again. Before callbacks
-must not perform the proposed tool/model action. Store a decision or query an
-already-available policy result instead. Remote approval or model-generated
-summary work can be scheduled by the application after a Pause, then processing
-resumes with retained input. The library has no asynchronous approval runtime.
+## Execution and processing
 
-Hooks are explicit control points, not automatic authorization. NoHooks allows
-all proposals. Direct unhooked Context/Completion methods deliberately bypass
-callbacks. Task capability masks select eligible workers but do not grant
-permission to perform real external operations. Keep authorization at execution.
+Prepared::execute_with_hooks gates immediately before calling the supplied
+Executor, then checks output bounds/UTF-8 before after_execute. Command's hooked
+entry point checks capture lengths but preserves stdout/stderr as arbitrary bytes.
+Applications may implement a command-backed Executor by composing both layers.
+Direct Prepared::execute, custom OS calls or unhooked Context operations remain
+explicit opt-outs; the library is not a sandbox and does not intercept them.
 
-Run `cargo run --locked --example hooks` and `cargo run --locked --example tool_output`.
-Tests cover ordering, short-circuiting, unchanged state on pause/deny, successful
-processing observations and separate loop completion observations.
+Completion::transform_with_hooks still owns the optional output-processing stage.
+Its gate receives read-only identity/status metadata and original text; after_result
+sees validated processed text and original length. Identity and failure flags are
+preserved. A processing retry must use retained input and must not re-execute the
+tool. See OUTPUT.md for Chain, JSON minification and semantic-safety rules.
+
+Each added method has a default implementation. Existing Hooks implementations,
+Before/After enum matches, tuple chains and mutable-reference forwarding remain
+compatible. Use separate callback state for parallel operations or synchronize it
+in the application. No hidden lock, global registry or spawned worker is added.
+
+## Security and audit
+
+Hook arguments may contain secrets, raw command output or untrusted text. Do not
+log them indiscriminately. Capability bits, command IDs, registered tool names and
+string allowlists are not authentication or OS isolation. Approve dangerous work
+at its actual execution boundary and keep the adapter's environment/sandbox policy
+consistent with the decision. NoHooks allows every structurally valid proposal.
+
+For asynchronous approval, return Pause before execution, obtain the decision in
+the application and invoke again only when authorized. The synchronous wrappers
+do not host an async runtime. Long-running work, cancellation and external effects
+remain application responsibilities; do not claim exactly-once execution from a
+callback counter. Read COMMANDS.md and run the real command_hooks example.

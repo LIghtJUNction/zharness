@@ -1,9 +1,14 @@
-//! Ordered, statically dispatched lifecycle hooks. No global callback registry.
-//!
-//! Before hooks can allow, pause or deny a proposed action. After hooks observe
-//! committed state and cannot turn a completed side effect into a retry signal.
-//! A paused before hook may be evaluated again; it must not execute the action.
-use crate::{Error, Invocation, context::Group, output::ResultMeta, zcall::v1::TurnOutcome};
+//! Ordered, statically dispatched lifecycle hooks. No global registry.
+//! Before callbacks gate proposals; after/error callbacks observe and never veto
+//! completed effects. Hook/adapter panics are not caught by this no_std core.
+use crate::{
+    Error, Invocation,
+    command::{Command, CommandFailure, CommandResult},
+    context::Group,
+    execution::{AfterExecute, BeforeExecute, ExecuteError},
+    output::ResultMeta,
+    zcall::v1::TurnOutcome,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[must_use]
@@ -73,16 +78,11 @@ pub enum After<'a> {
         task: u64,
     },
 }
-
-/// A result-processing proposal, after tool execution but before history commit.
-/// Pause/deny retains original output and does not execute a transform.
 #[derive(Clone, Copy, Debug)]
 pub struct BeforeResult<'a> {
     pub meta: ResultMeta<'a>,
     pub text: &'a str,
 }
-/// A validated transform output. This observes processing, not ToolLoop/history
-/// commitment. It cannot veto the result. Avoid leaking secrets into audit logs.
 #[derive(Clone, Copy, Debug)]
 pub struct AfterResult<'a> {
     pub meta: ResultMeta<'a>,
@@ -95,22 +95,33 @@ pub trait Hooks {
         Decision::Allow
     }
     fn after(&mut self, _event: After<'_>) {}
-    /// Additive default method; existing lifecycle implementations remain valid.
     fn before_result(&mut self, _event: BeforeResult<'_>) -> Decision {
         Decision::Allow
     }
     fn after_result(&mut self, _event: AfterResult<'_>) {}
+    /// Gate actual validated tool execution, not just a ToolLoop ticket issuance.
+    fn before_execute(&mut self, _event: BeforeExecute<'_>) -> Decision {
+        Decision::Allow
+    }
+    fn after_execute(&mut self, _event: AfterExecute<'_>) {}
+    fn execute_error(&mut self, _event: ExecuteError<'_>) {}
+    /// Gate a command adapter call with its exact executable, argv and cwd.
+    fn before_command(&mut self, _command: Command<'_>) -> Decision {
+        Decision::Allow
+    }
+    fn after_command(&mut self, _result: CommandResult<'_, '_>) {}
+    fn command_error(&mut self, _event: CommandFailure<'_>) {}
 }
 #[derive(Clone, Copy, Debug, Default)]
 pub struct NoHooks;
 impl Hooks for NoHooks {}
-/// Compose heterogeneous hooks with `(audit, policy)` or nested tuples.
-/// Before hooks short-circuit left-to-right. After observers all run in that order.
+/// Tuple chains short-circuit gates left-to-right. All normal-return observers
+/// run in that same order; they cannot change the returned result or error.
 impl<A: Hooks, B: Hooks> Hooks for (A, B) {
     fn before(&mut self, event: Before<'_>) -> Decision {
         match self.0.before(event) {
             Decision::Allow => self.1.before(event),
-            decision => decision,
+            d => d,
         }
     }
     fn after(&mut self, event: After<'_>) {
@@ -120,12 +131,40 @@ impl<A: Hooks, B: Hooks> Hooks for (A, B) {
     fn before_result(&mut self, event: BeforeResult<'_>) -> Decision {
         match self.0.before_result(event) {
             Decision::Allow => self.1.before_result(event),
-            decision => decision,
+            d => d,
         }
     }
     fn after_result(&mut self, event: AfterResult<'_>) {
         self.0.after_result(event);
         self.1.after_result(event);
+    }
+    fn before_execute(&mut self, event: BeforeExecute<'_>) -> Decision {
+        match self.0.before_execute(event) {
+            Decision::Allow => self.1.before_execute(event),
+            d => d,
+        }
+    }
+    fn after_execute(&mut self, event: AfterExecute<'_>) {
+        self.0.after_execute(event);
+        self.1.after_execute(event);
+    }
+    fn execute_error(&mut self, event: ExecuteError<'_>) {
+        self.0.execute_error(event);
+        self.1.execute_error(event);
+    }
+    fn before_command(&mut self, command: Command<'_>) -> Decision {
+        match self.0.before_command(command) {
+            Decision::Allow => self.1.before_command(command),
+            d => d,
+        }
+    }
+    fn after_command(&mut self, result: CommandResult<'_, '_>) {
+        self.0.after_command(result);
+        self.1.after_command(result);
+    }
+    fn command_error(&mut self, event: CommandFailure<'_>) {
+        self.0.command_error(event);
+        self.1.command_error(event);
     }
 }
 impl<H: Hooks + ?Sized> Hooks for &mut H {
@@ -140,6 +179,24 @@ impl<H: Hooks + ?Sized> Hooks for &mut H {
     }
     fn after_result(&mut self, event: AfterResult<'_>) {
         (**self).after_result(event);
+    }
+    fn before_execute(&mut self, event: BeforeExecute<'_>) -> Decision {
+        (**self).before_execute(event)
+    }
+    fn after_execute(&mut self, event: AfterExecute<'_>) {
+        (**self).after_execute(event);
+    }
+    fn execute_error(&mut self, event: ExecuteError<'_>) {
+        (**self).execute_error(event);
+    }
+    fn before_command(&mut self, command: Command<'_>) -> Decision {
+        (**self).before_command(command)
+    }
+    fn after_command(&mut self, result: CommandResult<'_, '_>) {
+        (**self).after_command(result);
+    }
+    fn command_error(&mut self, event: CommandFailure<'_>) {
+        (**self).command_error(event);
     }
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

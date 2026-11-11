@@ -5,13 +5,13 @@ windows, model/tool turns, lifecycle hooks, tool-output processing and multi-age
 coordination. The library is `no_std`, forbids unsafe code, and has one direct
 dependency: `zcall = "=0.1.2"`, with default features disabled.
 
-Version 0.2.1 adds output transforms to the native 0.2.0 source baseline. The
-previously published 0.1.1 package contains only the earlier registry/bridge;
-upgrading is required to use the native context, loop, cluster and result APIs.
+Version 0.2.2 adds hooks around actual tool and command execution, including error
+observations. Version 0.2.1 introduced result transforms and the native modules.
+The older 0.1.1 package contains only the earlier tool registry/bridge.
 
 ```toml
 [dependencies]
-zharness = { version = "=0.2.1", default-features = false }
+zharness = { version = "=0.2.2", default-features = false }
 ```
 
 ## Boundary
@@ -27,7 +27,8 @@ integration directory or sibling-repository CI dependency.
 |---|---|
 | `context` | Grouped history, budgets, pinned instructions, eviction, explicit summaries, forks and zcall request construction |
 | `turn` | Model/tool action state machine, actual ToolReady retention, bounded rounds/calls, cancellation and out-of-order completions |
-| `hooks` | Ordered before gates and after observers, including result processing, composed through tuples |
+| `hooks` | Ordered before gates and after/error observations, composed through tuples |
+| `execution`, `command` | Hooked actual tool/command adapter calls, preserved IDs/status and bounded output checks; no OS runtime |
 | `output` | Caller-buffered transform chains, UTF-8-safe text reduction and validated JSON minification |
 | `cluster` | Capability matching, task dependencies, leases, handoff, joins and bounded mailboxes |
 | `tools`, `validation`, `bridge` | Tool definitions, execution interfaces, argument validation and public zcall result APIs |
@@ -81,6 +82,20 @@ be issued and completed in any order. Retain outputs/history, acknowledge the
 zcall Session and call `commit_result`; only then can another model action be
 issued. This is a state machine, not an automatic network loop.
 
+## Execution before, after and failure
+
+`Prepared::execute_with_hooks` wraps the actual Executor call with before_execute,
+after_execute and execute_error. `Command::execute_with_hooks` similarly wraps a
+caller-supplied CommandExecutor using before_command, after_command and command_error.
+Neither wrapper executes a tool when its gate pauses or denies. Success observers
+receive validated output; errors remain errors and do not trigger an implicit retry.
+
+Command results keep separate stdout/stderr bytes and the exit status. A nonzero
+exit code is not silently converted to success. Applications supply their OS
+adapter and policy; commands are literal program/argument descriptors, not shell
+strings. The library does not globally intercept std::process or external commands.
+See [command contracts](COMMANDS.md) and [hook boundaries](HOOKS.md).
+
 ## Reduce tool output before history commitment
 
 ```rust
@@ -127,15 +142,16 @@ cargo run --locked --example tool_loop
 cargo run --locked --example hooks
 cargo run --locked --example agent_cluster
 cargo run --locked --example tool_output
+cargo run --locked --example command_hooks
 cargo bench --locked --benches
 ```
 
-`tool_loop` encodes actual zcall requests, consumes interleaved fixture bytes in
-17-byte chunks, retains two real call IDs, completes tools in reverse order and
-builds the next model request from retained history. `agent_cluster` demonstrates
-two tasks, a dependency join and mailbox delivery. `tool_output` shows a custom
-log filter, reduction hooks and retained failure semantics. Examples run without
-network credentials; they do not claim to launch remote agents or summarizers.
+`tool_loop` uses real zcall requests and recorded interleaved stream bytes;
+`agent_cluster` demonstrates dependency joins and mailboxes; `tool_output` shows
+explicit result filtering. `command_hooks` runs controlled real child processes,
+including a nonzero exit and output exceeding capture capacity. Its std/thread
+resources are application-owned, outside the no_std library. No credentials or
+remote model calls are required for these examples.
 
 ## Contracts
 
@@ -151,5 +167,6 @@ Agent leases reject stale board completions; they do not undo external work or
 provide cross-machine exactly-once execution. Give each run/board a fresh identity.
 
 See [architecture](ARCHITECTURE.md), [context](CONTEXT.md), [loop](HARNESS.md),
-[hooks](HOOKS.md), [output](OUTPUT.md), [agents](AGENTS.md), [tools](TOOLS.md),
-[bridge](ZCALL_BRIDGE.md), [security](SECURITY.md), and [performance](PERFORMANCE.md).
+[hooks](HOOKS.md), [commands](COMMANDS.md), [output](OUTPUT.md), [agents](AGENTS.md),
+[tools](TOOLS.md), [bridge](ZCALL_BRIDGE.md), [security](SECURITY.md), and
+[performance](PERFORMANCE.md).

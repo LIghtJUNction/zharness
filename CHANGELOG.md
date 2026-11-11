@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.2.2 — 2026-11-11
+
+- Add actual Executor entry-point hooks through Prepared::execute_with_hooks,
+  with before_execute, after_execute and execute_error callbacks.
+- Add borrowed command descriptors and a caller-supplied CommandExecutor boundary
+  with before_command, after_command and command_error callbacks. No OS runtime,
+  shell interpretation, hidden worker or process dependency is added to the core.
+- Preserve identities, business failure flags, binary stdout/stderr and nonzero
+  exit statuses. Validate adapter output bounds before completion observations.
+- Keep pause/deny side-effect-free at the adapter boundary; distinguish attempted
+  failures from blocked proposals and never retry external work implicitly.
+- Keep existing hook methods and lifecycle enums compatible; extend ordered tuple
+  and mutable-reference forwarding to all added callbacks.
+- Add real controlled subprocess examples, concurrent buffer/identity tests and
+  local allocation-counted hook/adapter benchmarks.
+
 ## 0.2.1 — 2026-11-11
 
 - Add caller-buffered ToolResultTransform and Completion transform helpers that
