@@ -68,3 +68,6 @@ zero measured host allocations; an independently linked plugin has its own
 allocator and is outside that counter. No startup-time or arbitrary plugin
 allocation claim is inferred from steady calls. The sample operation copies bytes;
 payload size and application work remain part of the measured call cost.
+
+See the [2026-11-12 measurement record](docs/PLUGINS-PERFORMANCE-2026-11-12.md)
+and its [raw CSV](docs/plugins-benchmark-2026-11-12.csv) for a recorded run.

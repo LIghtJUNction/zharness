@@ -1,0 +1,13 @@
+case,bytes,proxy_state_bytes,mean_ns,p50_instrumented_ns,p95_instrumented_ns,p99_instrumented_ns,host_allocations
+generated_call,64,80,36.54,50,50,60,0
+checked_bytes,64,80,39.86,30,40,41,0
+prepared_executor,64,80,25.35,50,51,51,0
+executor_two_hooks,64,80,45.22,50,60,80,0
+generated_call,1024,80,25.75,40,50,51,0
+checked_bytes,1024,80,25.60,40,50,51,0
+prepared_executor,1024,80,66.47,90,91,100,0
+executor_two_hooks,1024,80,75.86,90,100,111,0
+generated_call,4096,80,49.33,70,71,71,0
+checked_bytes,4096,80,49.00,70,71,71,0
+prepared_executor,4096,80,241.09,220,231,240,0
+executor_two_hooks,4096,80,237.35,221,231,411,0
