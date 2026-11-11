@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.3 — 2026-11-11
 
 - Add ten independent typed lifecycle families covering 97 explicit action labels:
   conversation, model, prompt, request, response, tool, context, agent, persistence
@@ -16,8 +16,8 @@
   payload interception; preserve every existing native Hooks method and enum.
 - Add a complete local conversation example, real Session pause/replay and privacy/
   configuration tests, 13 allocation-counted lifecycle cases and raw test evidence.
-- Keep crate metadata at 0.2.2; these source-only additions are not published by
-  this update. No release request, direct dependency or MCP integration is changed.
+- Publish the typed lifecycle APIs as 0.2.3 without changing the direct
+  zcall =0.1.2 dependency, MCP boundary, no_std contract or existing Hooks API.
 
 ## 0.2.2 — 2026-11-11
 

@@ -5,17 +5,16 @@ model/tool turns, hooks, output transforms and multi-agent coordination. The cor
 is `no_std`, forbids unsafe Rust and has one direct dependency:
 `zcall = "=0.1.2"` with default features disabled.
 
-**Unreleased source additions after v0.2.2:** typed lifecycle channels plus native
-conversation, model-settings, send and response adapters. These new APIs are not
-in the published 0.2.2 crate. Use a verified source commit to evaluate them; the
-source update itself does not trigger registry publication. Existing 0.2.2 Hooks
-implementations and enum variants remain unchanged.
+Version 0.2.3 publishes typed lifecycle channels and native conversation,
+model-settings, request-send and response adapters. Existing 0.2.2 Hooks
+implementations and lifecycle enum variants remain source-compatible.
+The library itself still does not start an HTTP client or agent runtime.
 
-For the previously published capabilities:
+To use the published package:
 
 ```toml
 [dependencies]
-zharness = { version = "=0.2.2", default-features = false }
+zharness = { version = "=0.2.3", default-features = false }
 ```
 
 ## Boundary
@@ -40,7 +39,7 @@ integration directory or cross-repository build dependency.
 | `cluster` | Capability matching, task dependencies, leases, handoff, joins and bounded mailboxes |
 | `tools`, `validation`, `bridge` | Tool definitions, argument policy and public zcall result APIs |
 
-## Grouped lifecycle hooks (unreleased)
+## Grouped lifecycle hooks (0.2.3)
 
 Use a small typed event rather than a hundred methods in one Hooks trait. The
 families are conversation, model, prompt, request, response, tool, context, agent,

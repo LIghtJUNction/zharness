@@ -26,7 +26,7 @@ a three-stage pipeline and validated JSON minification at 64 B through 64 KiB.
 The 12 execution cases compare local tool/command adapter wrappers with callback
 variants. They do not measure command process startup or external tool latency.
 
-## Typed lifecycle suite (new source additions)
+## Typed lifecycle suite (published in 0.2.3)
 
 Thirteen cases cover no-hook paired operations, two gates/observers, split receipt
 completion, committed model switching, and conversation acceptance, memory sending

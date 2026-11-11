@@ -2,8 +2,8 @@
 
 zharness has two complementary interfaces. Existing `Hooks` callbacks remain
 source-compatible and directly cover native tool-loop scheduling, context changes,
-agent assignments, actual tool/command execution and output processing. The new
-unreleased `lifecycle` module supplies typed, independent channels for wider
+agent assignments, actual tool/command execution and output processing. Since
+0.2.3, the `lifecycle` module supplies typed, independent channels for wider
 conversation, configuration, transport, reply and application-storage boundaries.
 No global callback registry or runtime is added by either interface.
 

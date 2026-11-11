@@ -1,9 +1,9 @@
 # Typed Harness Lifecycle API
 
-The lifecycle additions are unreleased source changes after tag v0.2.2. They are
-not included in the existing crates.io 0.2.2 archive. Use a verified source commit
-until a separate release is requested. No integration with an MCP repository is
-needed and no runtime/database/transport dependency has been added.
+Version 0.2.3 publishes the typed lifecycle APIs that were developed after
+v0.2.2. Use the published zharness 0.2.3 crate or its matching source tag.
+No integration with an MCP repository is needed; no runtime, database or
+transport dependency has been added.
 
 ## Three independent primitives
 

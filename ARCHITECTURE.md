@@ -61,5 +61,5 @@ none of those tasks. Native wrappers and explicitly application-wrapped boundari
 are enumerated separately in LIFECYCLE.md. Error propagation never implies rollback
 of external effects or permission for a blind retry. Panics are not caught.
 
-The dependency graph remains zharness -> zcall 0.1.2 -> zconv 0.2.2. The source
-change does not publish a new crate, add a runtime or depend on the MCP repository.
+The dependency graph remains zharness -> zcall 0.1.2 -> zconv 0.2.2. Version 0.2.3 publishes these lifecycle primitives without adding a runtime or
+an MCP repository dependency.

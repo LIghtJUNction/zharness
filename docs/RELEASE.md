@@ -1,13 +1,13 @@
 # Release contract
 
-The 0.2.2 patch adds execution hooks to published 0.2.1 without changing existing
-lifecycle enums or requiring changes to existing Hooks implementations. The exact
-production closure remains zharness -> zcall 0.1.2 -> zconv 0.2.2. No MCP workspace,
-command runtime or optional third-party dependency is introduced.
+The 0.2.3 patch publishes the previously merged lifecycle Hook API on top of
+0.2.2 without changing existing Hooks methods or lifecycle enum variants. The
+exact production closure remains zharness -> zcall 0.1.2 -> zconv 0.2.2.
+No MCP workspace, command runtime or optional dependency is introduced.
 
 Dispatch Release on the trusted default branch. Select patch/minor/major or an
 exact SemVer; manual publish defaults to false. To publish this already-bumped
-candidate, set version=0.2.2. Alternatively, update .github/release-request.json on
+candidate, set version=0.2.3. Alternatively, update .github/release-request.json on
 main with the exact crate/version/zcall pin and publish=true. Old mismatched markers
 fail closed. Ordinary source/tag pushes never initiate registry publication.
 
