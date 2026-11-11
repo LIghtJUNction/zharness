@@ -1,0 +1,65 @@
+{
+  "crate": "zharness",
+  "version": "0.2.4",
+  "published_at_utc": "2026-11-11T19:53:39.094039Z",
+  "yanked": false,
+  "checksum_sha256": "b562aedc315e60d43246a503d23118822494b0b876c94f99679de4fc884daa9c",
+  "archive_bytes": 136994,
+  "archive_files": 92,
+  "vcs": {
+    "git": {
+      "sha1": "636f3b5317fbe2f909e512a2cb59cccc1053a9c2"
+    },
+    "path_in_vcs": ""
+  },
+  "required_files_present": [
+    "src/plugin.rs",
+    "src/skills/mod.rs",
+    "src/skills/parse.rs",
+    "src/skills/fs.rs",
+    "PLUGINS.md",
+    "SKILLS.md",
+    "examples/native_plugin.rs",
+    "examples/plugin_host.rs"
+  ],
+  "direct_dependencies": {
+    "zcall": "=0.1.2",
+    "zplugin": "=0.1.0"
+  },
+  "rust_version": "1.99.1",
+  "features": {
+    "default": [
+      "std"
+    ],
+    "std": [
+      "zplugin/std"
+    ]
+  },
+  "registry_url": "https://crates.io/crates/zharness/0.2.4",
+  "download_url": "https://static.crates.io/crates/zharness/zharness-0.2.4.crate",
+  "release_workflow": "https://github.com/LIghtJUNction/zharness/actions/runs/43090363839",
+  "github_release": "https://github.com/LIghtJUNction/zharness/releases/tag/v0.2.4",
+  "consumer": {
+    "exit_code": 0,
+    "registry_sources": [
+      {
+        "name": "zharness",
+        "version": "0.2.4",
+        "source": "registry+https://github.com/rust-lang/crates.io-index"
+      },
+      {
+        "name": "zplugin",
+        "version": "0.1.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index"
+      }
+    ],
+    "checks": [
+      "VERSION == 0.2.4",
+      "skill metadata and normalized description",
+      "XML summary escaping and body separation",
+      "native cdylib compilation and loading",
+      "direct extension call and Executor call",
+      "cooperative close"
+    ]
+  }
+}
