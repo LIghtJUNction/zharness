@@ -146,3 +146,30 @@ fn malformed_schema_is_rejected() {
         Err(zharness::mcp::Error::InvalidTool)
     ));
 }
+
+
+#[test]
+fn line_decoder_handles_split_input_and_multiple_frames() {
+    let mut storage = [0u8; 32];
+    let mut decoder = zharness::transport::LineDecoder::new(&mut storage);
+    assert_eq!(decoder.push(b"{\"jsonrpc\":\"2.0\"").unwrap(), 15);
+    assert!(decoder.message().is_none());
+    let consumed = decoder.push(b"}\r\n{\"id\":2}\n").unwrap();
+    assert_eq!(consumed, 18);
+    assert_eq!(decoder.message(), Some(&b"{\"jsonrpc\":\"2.0\"}"[..]));
+    decoder.consume().unwrap();
+    assert_eq!(decoder.message(), Some(&b"{\"id\":2}"[..]));
+    decoder.consume().unwrap();
+    assert_eq!(decoder.buffered_len(), 0);
+}
+
+#[test]
+fn line_decoder_capacity_error_does_not_consume_input() {
+    let mut storage = [0u8; 3];
+    let mut decoder = zharness::transport::LineDecoder::new(&mut storage);
+    assert_eq!(
+        decoder.push(b"four"),
+        Err(zharness::transport::TransportError::Capacity)
+    );
+    assert_eq!(decoder.buffered_len(), 0);
+}
