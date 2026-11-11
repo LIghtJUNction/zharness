@@ -24,7 +24,7 @@ std = []
 
 [workspace]
 members = ["."]
-exclude = ["comparison", "integration"]
+exclude = ["comparison"]
 
 [profile.release]
 lto = "thin"
