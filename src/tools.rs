@@ -16,7 +16,10 @@ impl Tool<'_> {
     /// Validate the descriptor's basic wire constraints.
     pub fn validate(&self) -> Result<(), Error> {
         if self.name.is_empty() || self.name.len() > 128 || !self.name.is_ascii() || self.name.bytes().any(|b| b.is_ascii_control() || b == b' ') { return Err(Error::InvalidTool); }
-        if self.input_schema.as_bytes().first() != Some(&b'{') || self.input_schema.as_bytes().last() != Some(&b'}') { return Err(Error::InvalidTool); }
+        let schema = crate::json::root(self.input_schema.as_bytes()).map_err(|_| Error::InvalidTool)?;
+        if schema.kind != crate::json::Kind::Object {
+            return Err(Error::InvalidTool);
+        }
         Ok(())
     }
 }
