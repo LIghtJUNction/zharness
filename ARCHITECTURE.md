@@ -1,21 +1,49 @@
 # Architecture
 
-The application owns its agent loop. zharness owns only local tool composition;
-zcall owns model formats, streaming aggregation, lifecycle and request encoding;
-zconv remains zcall's private protocol implementation dependency. MCP wire
-handling is a sibling library, zmcp, composed by the application.
+zharness supplies native harness state transitions while the application owns
+all external work. zcall remains authoritative for model protocols, streaming
+aggregation, request/response IR and model-turn lifecycle. zharness uses only
+zcall's public v1 interfaces; it never interprets provider-specific tool fields.
 
-The bridge's only entry from model streaming is EventData::ToolReady. ReadyTool
-already has complete object arguments. zharness applies its explicit resource and
-business policy before invoking an executor. Its validation pass reuses the public
-zcall Json API, not zconv internals and not a copied provider parser.
+```text
+application: transport, authorization, model selection, clocks and scheduling
+  |
+  +-- Context ----> zcall RequestBuilder / Request ----> application transport
+  |                         ^
+  +-- ToolLoop <---- zcall Session events
+  |       |
+  |       +-- Execute ticket --> registry / validation / application executor
+  |                                  |
+  |                         retained Completion + explicit history commit
+  |
+  +-- Hooks: before gates / after observations at state-transition boundaries
+  |
+  +-- TaskBoard + Mailbox: multiple application-driven agent runs
+```
 
-InvocationStorage is the scheduling boundary. Copy into it only when a call must
-outlive an event callback. Callback acceptance and execution are separate: a
-Control::Pause path must not execute a side effect. The application chooses which
-retained calls run concurrently and owns cancellation and retry policy.
+Context borrows message groups and their payloads. Whole-group eviction avoids
+fragmenting a correctly grouped tool exchange. Forks copy only descriptors into
+caller storage. Token cost is a caller contract: a model-specific tokenizer or
+explicit estimate includes framing and extra request data. The library neither
+invents tokenizer accuracy nor invokes a summarizer during compaction.
 
-Completion retains the true tool-call ID and caller-owned output. Append it only
-after the assistant call exists in the next RequestBuilder history. Submit it to
-the Session only after the application has accepted the retained result. These
-are separate operations rather than an unsafe hidden distributed transaction.
+ToolLoop separates streaming observations from side-effecting tool dispatch.
+ToolReady data is retained in fixed CallSlot storage. The terminal outcome gates
+execution; incomplete/upstream-failed turns do not automatically execute tools.
+Execute tickets are scoped to run, round and slot. The application retains calls
+and outputs into its own history before the controller releases per-turn storage.
+
+Hook composition uses generics and tuples, not a mandatory dynamic registry.
+Before gates can pause or reject a transition; after observers see committed
+state. This avoids returning a retry signal after an irreversible tool has run.
+Hook failures/panics and external effects are still application responsibilities.
+
+TaskBoard holds task descriptors, not agent runtimes. Dependencies are submitted
+in topological order; claims match capability masks and allow one active lease
+per agent. Epoch, attempt and expiry fields fence stale completions. Explicit
+expiry requeues work only when the application requests it. Network delivery,
+worker startup, durable storage and distributed agreement remain outside the core.
+
+All modules can be used separately. The dependency closure remains
+zharness -> zcall 0.1.2 -> zconv 0.2.2. No MCP source, integration workspace or
+MCP repository checkout is required for building, testing or publishing zharness.

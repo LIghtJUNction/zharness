@@ -76,8 +76,7 @@ jobs:
       - run: cargo test --locked --doc
       - run: cargo check --locked --no-default-features
       - run: python scripts/audit.py
-      - name: Execute examples
-        run: python -c "import subprocess; [subprocess.run(['cargo','run','--locked','--example',n],check=True) for n in ['basic','tool_registry','tool_execution','zcall_bridge']]"
+      - run: python scripts/examples.py
       - name: WASM
         if: matrix.os == 'ubuntu-latest'
         run: |
@@ -114,6 +113,7 @@ jobs:
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: cargo test --locked --release --all-targets
       - run: cargo test --locked --doc
+      - run: python scripts/examples.py
       - run: python scripts/audit.py
       - run: cargo package --locked
       - run: cargo publish --dry-run --locked

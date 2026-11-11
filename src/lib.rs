@@ -1,6 +1,6 @@
 #![no_std]
 #![forbid(unsafe_code)]
-//! Caller-buffered harness primitives. Applications own I/O, permissions and scheduling.
+#![doc = include_str!("../README.md")]
 
 pub mod bridge;
 pub mod cluster;
