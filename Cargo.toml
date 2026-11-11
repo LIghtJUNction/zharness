@@ -45,3 +45,7 @@ harness = false
 [[bench]]
 name = "execution"
 harness = false
+
+[[bench]]
+name = "lifecycle"
+harness = false
