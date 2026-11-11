@@ -251,9 +251,9 @@ fn string_eq_ascii(token: &[u8], expected: &[u8]) -> bool {
                 b'"' | b'\\' | b'/' => escape,
                 b'b' => 8,
                 b'f' => 12,
-                b'n' => b'\\n',
-                b'r' => b'\\r',
-                b't' => b'\\t',
+                b'n' => b'\n',
+                b'r' => b'\r',
+                b't' => b'\t',
                 b'u' => {
                     if at + 4 > end { return false; }
                     let mut value = 0u16;
