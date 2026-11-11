@@ -3,7 +3,7 @@
 MCP protocol code lives in the independent repository
 https://github.com/LIghtJUNction/zmcp . zharness no longer exports an MCP server,
 JSON-RPC parser or transport codec. Its sole direct published dependency is
-zcall = 0.1.1, with default features disabled.
+zcall = 0.1.2, with default features disabled.
 
 The runnable integration/mcp application composes both libraries. Match
 zmcp::mcp::Action::CallTool, decode its tool name into caller scratch, validate

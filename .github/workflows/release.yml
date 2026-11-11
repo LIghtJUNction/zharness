@@ -15,6 +15,9 @@ on:
         description: Publish after validation; false validates only
         type: boolean
         default: false
+  push:
+    branches: [main]
+    paths: ['.github/release-request.json']
 permissions:
   contents: read
 concurrency:
@@ -31,11 +34,14 @@ jobs:
         with:
           persist-credentials: false
       - run: python scripts/test_release.py
+      - name: Validate trusted push-triggered release request
+        if: github.event_name == 'push'
+        run: python scripts/release.py request
       - id: plan
         env:
-          BUMP: ${{ inputs.bump }}
+          BUMP: ${{ inputs.bump || 'patch' }}
           MANUAL_VERSION: ${{ inputs.version }}
-          PUBLISH: ${{ inputs.publish }}
+          PUBLISH: ${{ github.event_name == 'push' || inputs.publish }}
         run: python scripts/release.py plan
   validate:
     needs: plan
@@ -80,7 +86,7 @@ jobs:
       - run: cargo package --locked
       - run: cargo publish --dry-run --locked
   publish:
-    if: inputs.publish
+    if: github.event_name == 'push' || inputs.publish
     needs: [plan, validate]
     runs-on: ubuntu-latest
     permissions:

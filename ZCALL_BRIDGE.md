@@ -17,4 +17,4 @@ the zcall IR. A target protocol unable to preserve that semantic must be handled
 through zcall's explicit conversion policy; zharness never silently drops it.
 
 The runnable examples/zcall_bridge.rs is also executed by an integration test.
-It uses published zcall 0.1.1 rather than a Git/path override or a fake event type.
+It uses published zcall 0.1.2 rather than a Git/path override or a fake event type.

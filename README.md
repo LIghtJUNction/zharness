@@ -2,7 +2,7 @@
 
 Small, caller-buffered building blocks for a developer-owned AI harness.
 The core is no_std and forbids unsafe Rust. Its only direct dependency is the
-published `zcall = 0.1.1`, with default features disabled.
+published `zcall = 0.1.2`, with default features disabled.
 
 MCP wire handling has been extracted to [zmcp](https://github.com/LIghtJUNction/zmcp).
 The application composes the two; neither library depends on the other.
@@ -58,5 +58,5 @@ never allocates; test/benchmark fixture generation can use std outside the core.
 
 See [architecture](ARCHITECTURE.md), [tools](TOOLS.md), [bridge](ZCALL_BRIDGE.md),
 [security](SECURITY.md), [MCP extraction](docs/MCP.md) and
-[performance](PERFORMANCE.md). This is an unreleased candidate, not a claim of a
+[performance](PERFORMANCE.md). Consult crates.io for published versions. This is not a claim of a
 completed production audit or a universal microsecond latency guarantee.
