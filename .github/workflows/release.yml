@@ -75,13 +75,24 @@ jobs:
           python3 - <<'PY'
           import json, os, urllib.request
           url = "https://crates.io/api/v1/crates/zharness/versions"
+          import urllib.error
           try:
               with urllib.request.urlopen(url, timeout=20) as response:
                   versions = json.load(response)["versions"]
+          except urllib.error.HTTPError as error:
+              if error.code == 404:
+                  versions = []
+              else:
+                  raise SystemExit(f"Cannot verify crates.io versions: HTTP {error.code}")
           except Exception as error:
               raise SystemExit(f"Cannot verify crates.io versions: {error}")
           if any(item["num"] == os.environ["VERSION"] for item in versions):
               raise SystemExit("This zharness version already exists on crates.io")
+          dependency_url = "https://crates.io/api/v1/crates/zcall/versions"
+          with urllib.request.urlopen(dependency_url, timeout=20) as response:
+              dependency_versions = json.load(response)["versions"]
+          if not any(item["num"] == "0.1.1" and not item["yanked"] for item in dependency_versions):
+              raise SystemExit("Pinned zcall 0.1.1 is not published and available on crates.io")
           PY
       - name: Update lockfile
         run: cargo update --workspace
