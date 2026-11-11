@@ -1,0 +1,115 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version increment (ignored when version is supplied)
+        required: true
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      version:
+        description: Optional exact version (for example 0.1.1)
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+      - name: Install stable Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup component add rustfmt clippy
+      - name: Select and validate version
+        id: version
+        env:
+          BUMP: ${{ inputs.bump }}
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          python3 - <<'PY'
+          import os, re, pathlib, tomllib
+          path = pathlib.Path("Cargo.toml")
+          data = tomllib.loads(path.read_text())
+          current = data["package"]["version"]
+          requested = os.environ["REQUESTED_VERSION"].strip()
+          if requested:
+              version = requested
+          else:
+              match = re.fullmatch(r"(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)", current)
+              if not match:
+                  raise SystemExit(f"Current version is not plain SemVer: {current}")
+              major, minor, patch = map(int, match.groups())
+              bump = os.environ["BUMP"]
+              if bump == "patch": patch += 1
+              elif bump == "minor": minor += 1; patch = 0
+              elif bump == "major": major += 1; minor = patch = 0
+              else: raise SystemExit(f"Invalid bump: {bump}")
+              version = f"{major}.{minor}.{patch}"
+          if not re.fullmatch(r"(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)", version):
+              raise SystemExit(f"Invalid release version: {version}")
+          if version == current:
+              raise SystemExit("Release version must differ from current version")
+          path.write_text(re.sub(r'(?m)^version = "[^"]+"$', f'version = "{version}"', path.read_text(), count=1))
+          pathlib.Path(os.environ["GITHUB_OUTPUT"]).open("a").write(f"version={version}\\n")
+          print(f"Release version: {version} (current: {current})")
+          PY
+      - name: Check registry version is unused
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          url = "https://crates.io/api/v1/crates/zharness/versions"
+          try:
+              with urllib.request.urlopen(url, timeout=20) as response:
+                  versions = json.load(response)["versions"]
+          except Exception as error:
+              raise SystemExit(f"Cannot verify crates.io versions: {error}")
+          if any(item["num"] == os.environ["VERSION"] for item in versions):
+              raise SystemExit("This zharness version already exists on crates.io")
+          PY
+      - name: Update lockfile
+        run: cargo update --workspace
+      - name: Verify
+        run: |
+          cargo fmt --all
+          cargo clippy --all-targets --locked -- -D warnings
+          cargo test --all-targets --locked
+          cargo test --release --all-targets --locked
+          cargo check --no-default-features --locked
+          cargo package --locked
+      - name: Publish dry run
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --locked --dry-run
+      - name: Publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --locked
+      - name: Tag and create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cargo.toml Cargo.lock
+          git commit -m "release: v${VERSION}"
+          git tag "v${VERSION}"
+          git push origin HEAD:main
+          git push origin "v${VERSION}"
+          gh release create "v${VERSION}" --generate-notes --title "zharness v${VERSION}"
