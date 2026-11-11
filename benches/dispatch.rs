@@ -34,7 +34,7 @@ fn main() {
         let p50 = percentile(&samples, 50);
         let p95 = percentile(&samples, 95);
         let p99 = percentile(&samples, 99);
-        let throughput = if p50 == 0 { 0 } else { 1_000_000_000u128 / p50 };
+        let throughput = 1_000_000_000u128.checked_div(p50).unwrap_or(0);
 
         println!(
             "tools={count}, p50_ns={p50}, p95_ns={p95}, p99_ns={p99},              throughput_ops_s={throughput}, registry_bytes={}",
