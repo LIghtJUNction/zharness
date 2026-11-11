@@ -17,6 +17,8 @@ pub mod output;
 pub mod request;
 pub mod response;
 pub mod settings;
+#[doc = include_str!("../SKILLS.md")]
+pub mod skills;
 pub mod tools;
 pub mod turn;
 pub mod validation;

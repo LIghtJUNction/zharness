@@ -49,3 +49,7 @@ harness = false
 [[bench]]
 name = "lifecycle"
 harness = false
+
+[[bench]]
+name = "skills"
+harness = false

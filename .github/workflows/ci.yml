@@ -34,6 +34,7 @@ jobs:
       - run: python scripts/examples.py
       - run: python scripts/test_release.py
       - run: cargo check --locked --no-default-features
+      - run: cargo run --locked --no-default-features --example skills
       - name: WASM no_std
         if: matrix.os == 'ubuntu-latest'
         run: |

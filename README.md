@@ -37,7 +37,35 @@ integration directory or cross-repository build dependency.
 | `execution`, `command` | Hooked user executors, preserved IDs/status and bounded output checks; no OS runtime |
 | `output` | Caller-buffered text reduction and validated JSON minification |
 | `cluster` | Capability matching, task dependencies, leases, handoff, joins and bounded mailboxes |
+| `skills` | Borrowed SKILL.md metadata, caller-buffered summaries, ordered directories and on-demand loading |
 | `tools`, `validation`, `bridge` | Tool definitions, argument policy and public zcall result APIs |
+
+## Native skills (source checkout)
+
+The source checkout adds skill support for the next release. The published
+0.2.3 package above predates this module; use the repository to try it:
+
+```toml
+[dependencies]
+zharness = { git = "https://github.com/LIghtJUNction/zharness", branch = "main" }
+```
+
+`SkillPaths::from_env(project)` combines project and global skills with any
+directories in `SKILLS_PATH`. Earlier valid names win, while unrelated global
+skills remain available. The environment follows the host PATH syntax and
+precedes the defaults. Use `prepend` or `push` for software-specific directories,
+or `SkillPaths::new(roots)` for an exact search plan.
+
+```sh
+export SKILLS_PATH="$PWD/.agents/skills:$HOME/.claude/skills:/opt/editor/skills"
+cargo run --locked --example skills
+```
+
+Discovery retains each skill's name, description and location. Summary generation
+writes escaped XML into your buffer; selected bodies and resources load on demand.
+The default `std` feature enables the filesystem adapter. Disabling default
+features retains the borrowed parser and summary writer with no `alloc` or I/O.
+See [SKILLS.md](SKILLS.md) for Rust examples, precedence, diagnostics and limits.
 
 ## Grouped lifecycle hooks (0.2.3)
 
@@ -169,4 +197,4 @@ are not authentication, and leases do not provide external exactly-once executio
 Read [architecture](ARCHITECTURE.md), [typed lifecycle](LIFECYCLE.md),
 [hook boundaries](HOOKS.md), [context](CONTEXT.md), [loop](HARNESS.md),
 [commands](COMMANDS.md), [output](OUTPUT.md), [agents](AGENTS.md),
-[security](SECURITY.md), and [performance](PERFORMANCE.md).
+[skills](SKILLS.md), [security](SECURITY.md), and [performance](PERFORMANCE.md).

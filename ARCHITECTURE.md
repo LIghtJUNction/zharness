@@ -63,3 +63,11 @@ of external effects or permission for a blind retry. Panics are not caught.
 
 The dependency graph remains zharness -> zcall 0.1.2 -> zconv 0.2.2. Version 0.2.3 publishes these lifecycle primitives without adding a runtime or
 an MCP repository dependency.
+
+Skills have a separate metadata and filesystem boundary. SkillMetadata borrows
+frontmatter and summary writers use caller buffers without alloc or I/O. The
+optional std SkillPaths adapter reads explicitly configured directories and keeps
+only metadata in a SkillCatalog. An ordered root list determines name precedence;
+an index accelerates lookup without duplicating owned names. A chosen skill loads
+its instructions and resources on demand. The application decides prompt placement,
+activation and tool permissions; discovery never starts a process or model call.

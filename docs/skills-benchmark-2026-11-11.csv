@@ -1,0 +1,11 @@
+case,items,bytes,mean_ns,p50_instrumented_ns,p95_instrumented_ns,p99_instrumented_ns,total_allocations
+parse_plain_header,1,256,1090.36,862,881,891,0
+parse_plain_large_body,1,1048832,977.71,861,1252,1493,0
+description_plain,1,58,670.31,641,641,781,0
+parse_folded_header,1,256,1461.52,1282,1282,1302,0
+parse_folded_large_body,1,1048832,1474.74,1291,1292,1302,0
+description_folded,1,83,1021.67,951,952,1112,0
+catalog_folded,1,280,982.19,892,1532,3245,0
+catalog_folded,16,3895,16234.07,14602,19139,65899,0
+catalog_folded,64,15463,71931.97,54182,114502,176535,0
+catalog_folded,256,61735,338860.00,220801,383305,467922,0
