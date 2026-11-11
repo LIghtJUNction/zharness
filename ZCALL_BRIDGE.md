@@ -1,23 +1,36 @@
 # zcall bridge
 
-The bridge must consume only zcall's public protocol-independent API. It must
-not inspect OpenAI, Anthropic, Gemini or other provider JSON.
+zharness consumes only zcall's public protocol-independent API. It never
+inspects OpenAI, Anthropic, Gemini or other provider JSON.
 
-## Current public boundary
+## ToolReady conversion
 
-tools::Invocation::from_zcall converts a public zcall::v1::ReadyTool into a
-borrowed view containing the original tool-call ID, tool name and complete
-validated JSON object argument bytes. No argument copy or allocation is needed.
+tools::Invocation::from_zcall converts a complete public
+zcall::v1::ReadyTool into a borrowed view containing the original call ID,
+registered tool name and complete JSON object argument bytes. The view does not
+copy or allocate. Incomplete tool arguments never become executable: zcall
+emits ToolReady only after the complete argument document has been validated.
 
-## Remaining integration work
+## Result lifecycle
 
-This is not yet the complete bridge requested for zharness. The current crate
-does not yet provide a tested end-to-end adapter that consumes Session events,
-dispatches multiple interleaved ToolReady values, constructs matching tool
-results through zcall's RequestBuilder, and prepares the next model turn.
-Do not treat Invocation alone as that full integration.
+The bridge example exercises the actual public lifecycle:
 
-The next implementation must be derived from the published zcall 0.1.1 API,
-including the exact result-submission contract, and must preserve each
-provider-independent call ID. It must not synthesize IDs or execute incomplete
-arguments.
+1. Construct caller-owned zcall StreamWorkspace and Session.
+2. Feed arbitrarily chunked provider stream bytes to Session::step.
+3. Observe EventData::ToolReady and convert it to Invocation.
+4. Check registry membership and call the application-supplied Executor.
+5. After the terminal event, submit each completed call ID through
+   Session::submit_tool_result.
+6. Build a follow-up zcall RequestBuilder request containing the original
+   assistant tool-call blocks and matching results through
+   Request::append_tool_result.
+7. Encode the next model request through zcall's protocol-independent API.
+
+Run it with cargo run --example zcall_bridge.
+
+## Boundaries
+
+zharness does not choose a model, make network requests, execute an agent loop,
+authorize a tool, or retain conversation history. The application controls
+parallelism and decides how tool failures are represented in its next turn.
+The bridge preserves original call IDs and does not invent replacements.
