@@ -173,3 +173,32 @@ fn line_decoder_capacity_error_does_not_consume_input() {
     );
     assert_eq!(decoder.buffered_len(), 0);
 }
+
+
+#[test]
+fn escaped_ascii_json_rpc_keys_are_decoded() {
+    let tools = ToolSet::new(TOOLS).unwrap();
+    let mut output = [0; 128];
+    let mut scratch = [0; 128];
+    let mut executor = Echo;
+    let request = br#"{"jsonrpc":"2.0","id":3,"\u006dethod":"ping"}"#;
+    let Outcome::Response(len) = Server::new("test", "0.1.0")
+        .handle(request, &mut output, &mut scratch, &tools, &mut executor)
+        .unwrap()
+    else {
+        panic!("expected response");
+    };
+    assert_eq!(&output[..len], br#"{"jsonrpc":"2.0","id":3,"result":{}}"#);
+}
+
+#[test]
+fn duplicate_decoded_json_rpc_keys_are_rejected() {
+    let tools = ToolSet::new(TOOLS).unwrap();
+    let mut output = [0; 128];
+    let mut scratch = [0; 128];
+    let mut executor = Echo;
+    let request = br#"{"jsonrpc":"2.0","id":3,"method":"ping","\u006dethod":"tools/list"}"#;
+    let result = Server::new("test", "0.1.0")
+        .handle(request, &mut output, &mut scratch, &tools, &mut executor);
+    assert_eq!(result, Err(zharness::mcp::Error::InvalidJson));
+}
