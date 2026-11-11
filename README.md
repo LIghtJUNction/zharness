@@ -8,17 +8,21 @@ zplugin's official macro generates the native interface and introduces
 compilation-only parser dependencies; the runtime dependency graph stays within
 Project Z crates.
 
-Version 0.2.3 publishes typed lifecycle channels and native conversation,
-model-settings, request-send and response adapters. Existing 0.2.2 Hooks
-implementations and lifecycle enum variants remain source-compatible.
-The library itself still does not start an HTTP client or agent runtime.
+Version 0.2.4 adds native skills and zplugin extensions alongside the typed
+lifecycle channels and conversation, model-settings, request-send and response
+adapters introduced in 0.2.3. Existing Hooks implementations and lifecycle enum
+variants remain source-compatible. The library itself does not start an HTTP
+client or agent runtime.
 
 To use the published package:
 
 ```toml
 [dependencies]
-zharness = { version = "=0.2.3", default-features = false }
+zharness = "=0.2.4"
 ```
+
+Default features enable filesystem skill discovery and native path loading.
+Set `default-features = false` to use the `no_std` core.
 
 ## Boundary
 
@@ -44,7 +48,7 @@ integration directory or cross-repository build dependency.
 | `plugin` | zplugin native loader, versioned byte-call interface, checked outputs and an Executor bridge |
 | `tools`, `validation`, `bridge` | Tool definitions, argument policy and public zcall result APIs |
 
-## Native extensions (source checkout)
+## Native extensions
 
 `plugin::Plugin` exposes zplugin's actual native loader. Load an explicitly chosen
 trusted library, create `ExtensionApi`'s typed proxy, then call operations with
@@ -57,15 +61,7 @@ operation semantics, payload schemas, scheduling, permissions and recovery.
 There is no automatic plugin scan, tool registration, execution or reload loop.
 See [PLUGINS.md](PLUGINS.md) for loading, plugin authoring, lifecycle and examples.
 
-## Native skills (source checkout)
-
-The source checkout adds skills and native extensions for the next release. The
-published 0.2.3 package above predates these modules; use the repository to try them:
-
-```toml
-[dependencies]
-zharness = { git = "https://github.com/LIghtJUNction/zharness", branch = "main" }
-```
+## Native skills
 
 `SkillPaths::from_env(project)` combines project and global skills with any
 directories in `SKILLS_PATH`. Earlier valid names win, while unrelated global

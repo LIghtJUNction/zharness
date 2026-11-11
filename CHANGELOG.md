@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.4 — 2026-11-12
 
 - Add zplugin =0.1.0 native loading, an explicitly versioned byte-call extension
   interface and safe output bounds/UTF-8 checks. Its generated proxy implements

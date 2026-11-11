@@ -1,7 +1,7 @@
 # Release contract
 
-Published 0.2.3 contains lifecycle hooks. The source checkout additionally has
-skills and native extension primitives. The runtime closure is zharness ->
+Version 0.2.4 contains lifecycle hooks, skills and native extension primitives.
+The runtime closure is zharness ->
 zcall 0.1.2 -> zconv 0.2.2 and zharness -> zplugin 0.1.0. The dependency audit
 checks the zplugin macro's compilation graph separately. Native libraries used
 by tests/examples are built locally from packaged sources; no sibling repository

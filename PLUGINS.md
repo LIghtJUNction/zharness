@@ -104,7 +104,7 @@ dependency; this does not create a second runtime copy inside one crate graph.
 crate-type = ["cdylib"]
 
 [dependencies]
-zharness = { git = "https://github.com/LIghtJUNction/zharness", branch = "main" }
+zharness = "=0.2.4"
 zplugin = { version = "=0.1.0", default-features = false, features = ["std", "macros"] }
 ```
 
