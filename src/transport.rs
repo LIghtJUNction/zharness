@@ -74,23 +74,23 @@ impl<'a> LineDecoder<'a> {
         if self.frame.is_some() {
             return Err(TransportError::FramePending);
         }
-        let mut consumed = 0;
-        for &byte in input {
-            let Some(slot) = self.buffer.get_mut(self.used) else {
-                return Err(TransportError::Capacity);
-            };
-            *slot = byte;
-            self.used += 1;
-            consumed += 1;
-            if byte == b'\n' {
-                let cr = self.used >= 2 && self.buffer[self.used - 2] == b'\r';
-                let framed_len = self.used;
-                let len = self.used - if cr { 2 } else { 1 };
-                self.frame = Some(LineFrame { len, framed_len });
-                break;
-            }
+        let count = input
+            .iter()
+            .position(|&byte| byte == b'\n')
+            .map_or(input.len(), |index| index + 1);
+        if count > self.remaining() {
+            return Err(TransportError::Capacity);
         }
-        Ok(consumed)
+        let start = self.used;
+        self.buffer[start..start + count].copy_from_slice(&input[..count]);
+        self.used += count;
+        if input.get(count.wrapping_sub(1)) == Some(&b'\n') {
+            let cr = self.used >= 2 && self.buffer[self.used - 2] == b'\r';
+            let framed_len = self.used;
+            let len = self.used - if cr { 2 } else { 1 };
+            self.frame = Some(LineFrame { len, framed_len });
+        }
+        Ok(count)
     }
 
     /// Borrow the completed message without its line delimiter.
