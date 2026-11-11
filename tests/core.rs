@@ -152,12 +152,12 @@ fn malformed_schema_is_rejected() {
 fn line_decoder_handles_split_input_and_multiple_frames() {
     let mut storage = [0u8; 32];
     let mut decoder = zharness::transport::LineDecoder::new(&mut storage);
-    assert_eq!(decoder.push(b"{\"jsonrpc\":\"2.0\"").unwrap(), 15);
+    assert_eq!(decoder.push(b"{\"jsonrpc\":\"2.0\"").unwrap(), 16);
     assert!(decoder.message().is_none());
-    let consumed = decoder.push(b"}\r\n{\"id\":2}\n").unwrap();
-    assert_eq!(consumed, 18);
+    assert_eq!(decoder.push(b"}\r\n{\"id\":2}\n").unwrap(), 3);
     assert_eq!(decoder.message(), Some(&b"{\"jsonrpc\":\"2.0\"}"[..]));
     decoder.consume().unwrap();
+    assert_eq!(decoder.push(b"{\"id\":2}\n").unwrap(), 9);
     assert_eq!(decoder.message(), Some(&b"{\"id\":2}"[..]));
     decoder.consume().unwrap();
     assert_eq!(decoder.buffered_len(), 0);
