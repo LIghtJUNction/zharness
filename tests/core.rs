@@ -96,3 +96,53 @@ fn notification_does_not_emit_a_response() {
         .unwrap();
     assert_eq!(outcome, Outcome::Notification);
 }
+
+
+#[test]
+fn modern_discovery_advertises_current_revision() {
+    let tools = ToolSet::new(TOOLS).unwrap();
+    let mut output = [0; 512];
+    let mut scratch = [0; 128];
+    let mut executor = Echo;
+    let request = br#"{"jsonrpc":"2.0","id":"d","method":"server/discover","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"}}}"#;
+    let Outcome::Response(len) = Server::new("test", "0.1.0")
+        .handle(request, &mut output, &mut scratch, &tools, &mut executor)
+        .unwrap()
+    else {
+        panic!("expected discovery response");
+    };
+    let response = core::str::from_utf8(&output[..len]).unwrap();
+    assert!(response.contains("2026-07-28"));
+    assert!(response.contains(r#""resultType":"complete""#));
+}
+
+#[test]
+fn modern_tools_list_uses_complete_result_envelope() {
+    let tools = ToolSet::new(TOOLS).unwrap();
+    let mut output = [0; 512];
+    let mut scratch = [0; 128];
+    let mut executor = Echo;
+    let request = br#"{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"}}}"#;
+    let Outcome::Response(len) = Server::new("test", "0.1.0")
+        .handle(request, &mut output, &mut scratch, &tools, &mut executor)
+        .unwrap()
+    else {
+        panic!("expected list response");
+    };
+    let response = core::str::from_utf8(&output[..len]).unwrap();
+    assert!(response.contains(r#""resultType":"complete""#));
+    assert!(response.contains(r#""name":"echo""#));
+}
+
+#[test]
+fn malformed_schema_is_rejected() {
+    let invalid = [Tool {
+        name: "bad",
+        description: "invalid schema",
+        input_schema: r#"{"type": object}"#,
+    }];
+    assert!(matches!(
+        ToolSet::new(&invalid),
+        Err(zharness::mcp::Error::InvalidTool)
+    ));
+}
