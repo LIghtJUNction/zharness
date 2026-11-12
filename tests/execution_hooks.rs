@@ -107,6 +107,7 @@ impl Executor for ToolExec<'_> {
 static TOOLS: &[Tool<'static>] = &[Tool::new("test", "test", r#"{"type":"object"}"#)];
 fn prepared() -> zharness::bridge::Prepared<'static> {
     Invocation {
+        signature: None,
         call_id: "real-1",
         name: "test",
         arguments: b"{}",

@@ -49,6 +49,7 @@ impl<'a> Tool<'a> {
             name: Text::new(self.name),
             description: Presence::Value(Text::new(self.description)),
             parameters: Presence::Value(self.validate_with(tokens)?),
+            schema_dialect: crate::zcall::v1::SchemaDialect::JsonSchema,
             strict: Presence::Missing,
             legacy: false,
         })

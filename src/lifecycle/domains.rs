@@ -238,7 +238,7 @@ pub mod model {
 
 pub mod response {
     use super::{Fault, LifecycleEvent, Payload};
-    use crate::zcall::v1::{BlockType, EventKey, StreamUsage, TurnOutcome};
+    use crate::zcall::v1::{BlockType, EventKey, ProviderSignature, StreamUsage, TurnOutcome};
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     #[non_exhaustive]
     pub enum Action {
@@ -252,6 +252,10 @@ pub mod response {
         Signature,
         BlockEnd,
         ToolReady,
+        Images,
+        Grounding,
+        Continuation,
+        StopSequence,
         Usage,
         ChoiceEnd,
         Snapshot,
@@ -274,6 +278,10 @@ pub mod response {
             Self::Signature,
             Self::BlockEnd,
             Self::ToolReady,
+            Self::Images,
+            Self::Grounding,
+            Self::Continuation,
+            Self::StopSequence,
             Self::Usage,
             Self::ChoiceEnd,
             Self::Snapshot,
@@ -291,6 +299,8 @@ pub mod response {
         pub payload: Payload<'a>,
         pub sequence: u64,
         pub key: Option<EventKey>,
+        pub choice: Option<u32>,
+        pub signature: Option<ProviderSignature<'a>>,
         pub block: Option<BlockType>,
         /// First nonempty text/refusal delta in this turn, not hidden reasoning.
         pub first_visible: bool,
@@ -304,6 +314,8 @@ pub mod response {
                 payload: Payload::metadata(0),
                 sequence: 0,
                 key: None,
+                choice: None,
+                signature: None,
                 block: None,
                 first_visible: false,
                 terminal: None,
@@ -315,6 +327,7 @@ pub mod response {
         fn redacted(self) -> Self {
             Self {
                 payload: self.payload.redacted(),
+                signature: None,
                 ..self
             }
         }

@@ -182,6 +182,7 @@ let mut extension = ExtensionApi::create(&library)?;
 let tools = [Tool::new("echo", "Echo input", r#"{"type":"object"}"#)];
 let registry = ToolSet::new(&tools)?;
 let invocation = Invocation {
+    signature: None,
     call_id: "call-1",
     name: "echo",
     arguments: br#"{"message":"hello"}"#,

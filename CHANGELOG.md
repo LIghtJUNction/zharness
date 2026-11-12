@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0 (unreleased)
+
+- Target zcall 0.2.0 and its zconv 0.3.0 dependency; update exact dependency audit expectations.
+- Map images, grounding, continuation and stop sequences to distinct response lifecycle actions, retaining source choice and payload.
+- Retain provider-bound tool signatures in InvocationStorage and Prepared; metadata-only lifecycle observations redact signatures.
+- Preserve uncached and canonical input counters together and retain each signature event's explicit provider origin in lifecycle hooks.
+- Rust source migration: initialize Invocation.signature (None for unsigned calls). When rebuilding assistant history, apply Prepared::signature through Request::set_block_signature; Content alone carries no block metadata. The re-exported zcall v1 gains new event variants and usage/schema metadata fields.
+
 ## 0.2.4 — 2026-11-12
 
 - Add zplugin =0.1.0 native loading, an explicitly versioned byte-call extension

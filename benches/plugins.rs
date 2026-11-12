@@ -114,6 +114,7 @@ fn main() {
             input.as_bytes()
         );
         let invocation = Invocation {
+            signature: None,
             call_id: "plugin-benchmark",
             name: "echo",
             arguments: input.as_bytes(),

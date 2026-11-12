@@ -68,10 +68,18 @@ impl ResponseStream {
                     && !event.payload.is_empty()
                     && matches!(kind, BlockType::Text | BlockType::Refusal);
             }
-            EventData::Signature { key, signature } => {
+            EventData::Signature {
+                key,
+                signature,
+                origin,
+            } => {
                 event.action = Action::Signature;
                 event.key = Some(key);
                 event.payload = Payload::text(signature);
+                event.signature = Some(crate::zcall::v1::ProviderSignature {
+                    source: origin,
+                    value: signature,
+                });
             }
             EventData::BlockEnded { key } => {
                 event.action = Action::BlockEnd;
@@ -82,6 +90,26 @@ impl ResponseStream {
                 event.key = Some(tool.key);
                 event.block = Some(BlockType::Tool);
                 event.payload = Payload::bytes(tool.arguments.as_bytes());
+                event.signature = tool.signature;
+            }
+            EventData::Images { choice, json } => {
+                event.action = Action::Images;
+                event.choice = Some(choice);
+                event.payload = Payload::bytes(json);
+            }
+            EventData::Grounding { choice, json } => {
+                event.action = Action::Grounding;
+                event.choice = Some(choice);
+                event.payload = Payload::bytes(json);
+            }
+            EventData::Continuation { choice, token } => {
+                event.action = Action::Continuation;
+                event.choice = Some(choice);
+                event.payload = Payload::text(token);
+            }
+            EventData::StopSequence { sequence } => {
+                event.action = Action::StopSequence;
+                event.payload = Payload::text(sequence);
             }
             EventData::Usage(usage) => {
                 event.action = Action::Usage;

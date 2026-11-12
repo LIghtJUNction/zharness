@@ -39,22 +39,22 @@ checksum = "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563"
 
 [[package]]
 name = "zcall"
-version = "0.1.2"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c574575d70bdeea1132cf9c0ad341ca482bb8c3be3fca55a009451ee294bafd2"
+checksum = "b2d9e280e28a79ef4544ad030e5e032721985984b0df24e838a82eadc9b947af"
 dependencies = [
  "zconv",
 ]
 
 [[package]]
 name = "zconv"
-version = "0.2.2"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48036db39f0148be3536614d546448cc9a386ce30b43df901a2c779b9e1c1421"
+checksum = "e57ba714b29974daee2aacee58e9c43a1467e4eadb1afc9b8f2f2c9e64b4d6f4"
 
 [[package]]
 name = "zharness"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "zcall",
  "zplugin",

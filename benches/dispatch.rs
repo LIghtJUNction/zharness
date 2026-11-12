@@ -122,6 +122,7 @@ fn main() {
         let raw = format!("{{\"x\":\"{}\"}}", "x".repeat(size - 8));
         assert_eq!(raw.len(), size);
         let call = Invocation {
+            signature: None,
             call_id: "real-call-id",
             name: "echo",
             arguments: raw.as_bytes(),

@@ -33,6 +33,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )];
     let registry = ToolSet::new(&tools)?;
     let invocation = Invocation {
+        signature: None,
         call_id: "native-example-1",
         name: "echo",
         arguments: br#"{"message":"host-owned tool policy"}"#,

@@ -333,3 +333,131 @@ fn waiting_tools_is_not_a_final_assistant_answer() {
             .is_err()
     );
 }
+
+#[test]
+fn new_stream_metadata_reaches_hooks_and_consumer_without_becoming_visible_text() {
+    use zharness::lifecycle::Visibility;
+    #[derive(Default)]
+    struct MetadataLog {
+        actions: Vec<response::Action>,
+    }
+    impl<'a> Observer<response::Event<'a>> for MetadataLog {
+        fn observe(&mut self, notice: Notice<response::Event<'a>>) {
+            if notice.phase == Phase::Finished(Outcome::Succeeded) {
+                let event = notice.proposal.event;
+                if matches!(
+                    event.action,
+                    response::Action::Images | response::Action::Grounding
+                ) {
+                    assert_eq!(event.choice, Some(2));
+                    assert!(event.payload.as_bytes().is_some());
+                    assert!(!event.first_visible);
+                    self.actions.push(event.action);
+                }
+            }
+        }
+    }
+    let mut lifecycle =
+        Lifecycle::new(1, NoGate, MetadataLog::default()).with_visibility(Visibility::Content);
+    let mut response = ResponseStream::new(IDS);
+    response
+        .accept(
+            EventData::Started {
+                response_id: None,
+                model: None,
+                created: None,
+            },
+            &mut lifecycle,
+            |_| Ok(Control::Continue),
+        )
+        .unwrap();
+    for event in [
+        EventData::Images {
+            choice: 2,
+            json: b"[]",
+        },
+        EventData::Grounding {
+            choice: 2,
+            json: b"{}",
+        },
+    ] {
+        response
+            .accept(event, &mut lifecycle, |data| {
+                assert!(matches!(
+                    data,
+                    EventData::Images { .. } | EventData::Grounding { .. }
+                ));
+                Ok(Control::Continue)
+            })
+            .unwrap();
+    }
+    assert!(!response.has_visible_content());
+    assert_eq!(
+        lifecycle.observer().actions,
+        [response::Action::Images, response::Action::Grounding]
+    );
+}
+
+#[test]
+fn signature_origin_and_uncached_usage_survive_hooks_with_signature_redaction() {
+    use zharness::lifecycle::Visibility;
+    #[derive(Default)]
+    struct MetadataLog {
+        origin: Option<Format>,
+        counts: Option<(Option<u64>, Option<u64>)>,
+    }
+    impl<'a> Observer<response::Event<'a>> for MetadataLog {
+        fn observe(&mut self, notice: Notice<response::Event<'a>>) {
+            if notice.phase == Phase::Finished(Outcome::Succeeded) {
+                let event = notice.proposal.event;
+                if event.action == response::Action::Signature {
+                    self.origin = event.signature.map(|signature| {
+                        assert!(signature.value.eq_str("signed"));
+                        signature.source
+                    });
+                }
+                if let Some(usage) = event.usage {
+                    self.counts = Some((usage.uncached_input, usage.input));
+                }
+            }
+        }
+    }
+    for visibility in [Visibility::Metadata, Visibility::Content] {
+        let mut lifecycle =
+            Lifecycle::new(1, NoGate, MetadataLog::default()).with_visibility(visibility);
+        let mut response = ResponseStream::new(IDS);
+        let origin = Format::new(Protocol::GeminiGenerateContent);
+        for event in [
+            EventData::Started {
+                response_id: None,
+                model: None,
+                created: None,
+            },
+            EventData::Signature {
+                key: EventKey::default(),
+                signature: Text::new("signed"),
+                origin,
+            },
+            EventData::Usage(StreamUsage {
+                input: Some(10),
+                uncached_input: Some(5),
+                ..StreamUsage::default()
+            }),
+        ] {
+            response
+                .accept(event, &mut lifecycle, |data| {
+                    if let EventData::Signature { origin: actual, .. } = data {
+                        assert_eq!(actual, origin);
+                    }
+                    Ok(Control::Continue)
+                })
+                .unwrap();
+        }
+        assert_eq!(
+            lifecycle.observer().origin,
+            (visibility == Visibility::Content).then_some(origin)
+        );
+        assert_eq!(lifecycle.observer().counts, Some((Some(5), Some(10))));
+        assert!(!response.has_visible_content());
+    }
+}

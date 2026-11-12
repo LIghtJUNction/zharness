@@ -23,6 +23,7 @@ fn main() -> Result<(), Error> {
     let definitions = [Tool::new("echo", "Echo", r#"{"type":"object"}"#)];
     let tools = ToolSet::new(&definitions)?;
     let invocation = Invocation {
+        signature: None,
         call_id: "app-1",
         name: "echo",
         arguments: br#"{"message":"hello"}"#,

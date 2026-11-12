@@ -85,6 +85,7 @@ pub fn main() -> Result<(), Error> {
     let registry = ToolSet::new(&definitions)?;
     // A local demonstration ID. Real model flows must retain the ReadyTool ID.
     let call = Invocation {
+        signature: None,
         call_id: "demo-build-1",
         name: "build",
         arguments: b"{}",

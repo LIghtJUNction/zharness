@@ -60,6 +60,7 @@ impl Hooks for Audit {
 fn prepared(name: &'static str, arguments: &'static [u8]) -> zharness::bridge::Prepared<'static> {
     let tools = [Tool::new(name, "Fixture operation", r#"{"type":"object"}"#)];
     Invocation {
+        signature: None,
         call_id: "native-call-1",
         name,
         arguments,

@@ -88,6 +88,7 @@ fn argument_validation_reuses_zcall_and_limits_scalars() {
 #[test]
 fn retain_is_transactional_and_preserves_true_id() {
     let call = Invocation {
+        signature: None,
         call_id: "real-id",
         name: "echo",
         arguments: b"{}",
@@ -96,6 +97,7 @@ fn retain_is_transactional_and_preserves_true_id() {
     storage.store(call).unwrap();
     assert_eq!(storage.view().unwrap().call_id, "real-id");
     let large = Invocation {
+        signature: None,
         arguments: b"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
         ..call
     };
@@ -130,6 +132,7 @@ fn failed_results_and_duplicate_submission_are_explicit() {
     let definitions = [Tool::new("echo", "Echo", SCHEMA)];
     let tools = ToolSet::new(&definitions).unwrap();
     let call = Invocation {
+        signature: None,
         call_id: "c1",
         name: "echo",
         arguments: b"{}",
@@ -157,6 +160,7 @@ fn failed_results_and_duplicate_submission_are_explicit() {
     assert!(result.append_to(&mut request).is_err());
     assert!(
         Invocation {
+            signature: None,
             name: "unknown",
             ..call
         }
@@ -165,6 +169,7 @@ fn failed_results_and_duplicate_submission_are_explicit() {
     );
     assert!(
         Invocation {
+            signature: None,
             arguments: b"{",
             ..call
         }
@@ -204,4 +209,61 @@ mod bridge_example;
 #[test]
 fn real_interleaved_stream_and_next_turn() {
     bridge_example::main();
+}
+
+#[test]
+fn retained_tool_signature_keeps_provider_and_bytes_without_weakening_capacity_atomicity() {
+    use zharness::zcall::v1::{Format, Protocol, ProviderSignature, Text};
+    let call = Invocation {
+        call_id: "c",
+        name: "echo",
+        arguments: b"{}",
+        signature: Some(ProviderSignature {
+            source: Format::new(Protocol::GeminiGenerateContent),
+            value: Text::new("provider-signature"),
+        }),
+    };
+    let mut storage = InvocationStorage::<64>::new();
+    storage.store(call).unwrap();
+    let retained = storage.view().unwrap();
+    let signature = retained.signature.unwrap();
+    assert_eq!(
+        signature.source,
+        Format::new(Protocol::GeminiGenerateContent)
+    );
+    assert!(signature.value.eq_str("provider-signature"));
+    let tools = [Tool::new("echo", "Echo", SCHEMA)];
+    let registry = ToolSet::new(&tools).unwrap();
+    let prepared = retained
+        .prepare(
+            &registry,
+            &mut TokenStorage::<16>::new(),
+            ArgumentLimits::default(),
+        )
+        .unwrap();
+    assert!(
+        prepared
+            .signature()
+            .unwrap()
+            .value
+            .eq_str("provider-signature")
+    );
+    let long_signature = "s".repeat(100);
+    let too_large = Invocation {
+        signature: Some(ProviderSignature {
+            value: Text::new(&long_signature),
+            ..signature
+        }),
+        ..call
+    };
+    assert!(storage.store(too_large).is_err());
+    assert!(
+        storage
+            .view()
+            .unwrap()
+            .signature
+            .unwrap()
+            .value
+            .eq_str("provider-signature")
+    );
 }

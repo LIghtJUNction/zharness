@@ -1,6 +1,6 @@
 [package]
 name = "zharness"
-version = "0.2.4"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.99.1"
 description = "Caller-buffered context, tool-loop, hook and multi-agent harness primitives"
@@ -12,7 +12,7 @@ categories = ["api-bindings", "development-tools"]
 include = ["src/**", "tests/**", "examples/**", "benches/**", "docs/**", "*.md", "LICENSE-*", "Cargo.toml", "Cargo.lock"]
 
 [dependencies]
-zcall = { version = "=0.1.2", default-features = false }
+zcall = { version = "=0.2.0", default-features = false }
 zplugin = { version = "=0.1.0", default-features = false, features = ["macros"] }
 
 [features]

@@ -8,7 +8,7 @@ root = pathlib.Path(__file__).resolve().parents[1]
 manifest = tomllib.loads((root / 'Cargo.toml').read_text())
 assert not (root / 'build.rs').exists(), 'build.rs is forbidden'
 assert not (root / 'integration').exists(), 'MCP integration belongs to its own repository'
-pins = {'zcall': '=0.1.2', 'zplugin': '=0.1.0'}
+pins = {'zcall': '=0.2.0', 'zplugin': '=0.1.0'}
 assert set(manifest.get('dependencies', {})) == set(pins)
 for name, version in pins.items():
     dep = manifest['dependencies'][name]
@@ -34,7 +34,7 @@ for dep in package['dependencies']:
 assert package['version'] == manifest['package']['version']
 zcall = next(p for p in m['packages'] if p['name'] == 'zcall')
 zconv = next(p for p in m['packages'] if p['name'] == 'zconv')
-assert zcall['version'] == '0.1.2' and zconv['version'] == '0.2.2'
+assert zcall['version'] == '0.2.0' and zconv['version'] == '0.3.0'
 for name in ('zplugin', 'zplugin-macros'):
     assert next(p for p in m['packages'] if p['name'] == name)['version'] == '0.1.0'
 for package in m['packages']:
@@ -61,5 +61,5 @@ while pending:
             pending.append(dep['pkg'])
 assert {packages[identifier]['name'] for identifier in seen} == runtime_names
 print(f"Dependency audit passed: zharness {manifest['package']['version']}; "
-      "runtime zcall 0.1.2 / zconv 0.2.2 / zplugin 0.1.0; "
+      "runtime zcall 0.2.0 / zconv 0.3.0 / zplugin 0.1.0; "
       "zplugin-macros and its parser dependencies are compilation-only")

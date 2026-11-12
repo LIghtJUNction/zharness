@@ -137,6 +137,7 @@ fn main() {
     for size in [64, 1024, 4096] {
         let json = format!("{{\"x\":\"{}\"}}", "x".repeat(size - 8));
         let call = Invocation {
+            signature: None,
             call_id: "call-1",
             name: "echo",
             arguments: json.as_bytes(),

@@ -5,7 +5,8 @@ use crate::{
     tools::{Executor, Registry},
     validation::{ArgumentLimits, Arguments, ValidationPolicy},
     zcall::v1::{
-        Content, Data, EventData, Presence, ReadyTool, Request, Session, Text, TokenStorage,
+        Content, Data, EventData, Format, Presence, ProviderSignature, ReadyTool, Request, Session,
+        Text, TokenStorage,
     },
 };
 
@@ -15,6 +16,7 @@ pub struct Invocation<'a> {
     pub call_id: &'a str,
     pub name: &'a str,
     pub arguments: &'a [u8],
+    pub signature: Option<ProviderSignature<'a>>,
 }
 impl<'a> Invocation<'a> {
     pub fn from_zcall(tool: ReadyTool<'a>) -> Self {
@@ -22,6 +24,7 @@ impl<'a> Invocation<'a> {
             call_id: tool.call_id,
             name: tool.name,
             arguments: tool.arguments.as_bytes(),
+            signature: tool.signature,
         }
     }
     pub fn from_event(event: EventData<'a>) -> Option<Self> {
@@ -47,6 +50,7 @@ impl<'a> Invocation<'a> {
             call_id: self.call_id,
             name: self.name,
             arguments,
+            signature: self.signature,
         })
     }
 }
@@ -57,6 +61,8 @@ pub struct InvocationStorage<const N: usize> {
     bytes: [u8; N],
     id_len: usize,
     name_len: usize,
+    args_len: usize,
+    signature_source: Option<Format>,
     used: usize,
     occupied: bool,
 }
@@ -66,6 +72,8 @@ impl<const N: usize> InvocationStorage<N> {
             bytes: [0; N],
             id_len: 0,
             name_len: 0,
+            args_len: 0,
+            signature_source: None,
             used: 0,
             occupied: false,
         }
@@ -77,6 +85,7 @@ impl<const N: usize> InvocationStorage<N> {
             .len()
             .checked_add(call.name.len())
             .and_then(|n| n.checked_add(call.arguments.len()))
+            .and_then(|n| n.checked_add(call.signature.map_or(0, |s| s.value.decoded_len())))
             .ok_or(Error::Capacity { needed: usize::MAX })?;
         if needed > N {
             return Err(Error::Capacity { needed });
@@ -85,7 +94,15 @@ impl<const N: usize> InvocationStorage<N> {
         let args_start = name_start + call.name.len();
         self.bytes[..name_start].copy_from_slice(call.call_id.as_bytes());
         self.bytes[name_start..args_start].copy_from_slice(call.name.as_bytes());
-        self.bytes[args_start..needed].copy_from_slice(call.arguments);
+        let args_end = args_start + call.arguments.len();
+        self.bytes[args_start..args_end].copy_from_slice(call.arguments);
+        if let Some(signature) = call.signature {
+            signature
+                .value
+                .decode_into(&mut self.bytes[args_end..needed])?;
+        }
+        self.args_len = call.arguments.len();
+        self.signature_source = call.signature.map(|signature| signature.source);
         self.id_len = name_start;
         self.name_len = call.name.len();
         self.used = needed;
@@ -100,7 +117,16 @@ impl<const N: usize> InvocationStorage<N> {
         Some(Invocation {
             call_id: core::str::from_utf8(&self.bytes[..self.id_len]).ok()?,
             name: core::str::from_utf8(&self.bytes[self.id_len..args]).ok()?,
-            arguments: &self.bytes[args..self.used],
+            arguments: &self.bytes[args..args + self.args_len],
+            signature: match self.signature_source {
+                Some(source) => Some(ProviderSignature {
+                    source,
+                    value: Text::new(
+                        core::str::from_utf8(&self.bytes[args + self.args_len..self.used]).ok()?,
+                    ),
+                }),
+                None => None,
+            },
         })
     }
     pub fn clear(&mut self) {
@@ -122,8 +148,15 @@ pub struct Prepared<'a> {
     call_id: &'a str,
     name: &'a str,
     arguments: Arguments<'a>,
+    signature: Option<ProviderSignature<'a>>,
 }
 impl<'a> Prepared<'a> {
+    /// Apply this provider-bound signature with Request::set_block_signature
+    /// after appending content to the next conversation request.
+    pub fn signature(self) -> Option<ProviderSignature<'a>> {
+        self.signature
+    }
+
     pub fn call_id(self) -> &'a str {
         self.call_id
     }
@@ -138,6 +171,8 @@ impl<'a> Prepared<'a> {
         Ok(self)
     }
     /// Append this content through zcall RequestBuilder::message(Role::Assistant, ...).
+    /// Content excludes block metadata: retain signature() and apply it through
+    /// Request::set_block_signature after appending a signed call.
     pub fn content(self) -> Content<'a> {
         Content::ToolCall {
             id: Presence::Value(Text::new(self.call_id)),
