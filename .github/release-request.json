@@ -1,6 +1,5 @@
 {
-  "crate": "zharness",
-  "version": "0.2.4",
-  "zcall": "=0.1.2",
-  "publish": true
+  "bump": "custom",
+  "version": "0.4.0",
+  "dry_run": false
 }
