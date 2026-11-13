@@ -251,8 +251,10 @@ def emit(**values):
 
 
 def plan(settings):
-    require(os.getenv("GITHUB_REPOSITORY", REPOSITORY) == REPOSITORY, "releases are restricted to the owning repository")
-    require(os.getenv("GITHUB_REF", "refs/heads/main") == "refs/heads/main", "release from main only")
+    # PR/fork evidence is read-only; only publication requires owner/main authority.
+    if settings["dry_run"] is not True:
+        require(os.getenv("GITHUB_REPOSITORY", REPOSITORY) == REPOSITORY, "releases are restricted to the owning repository")
+        require(os.getenv("GITHUB_REF", "refs/heads/main") == "refs/heads/main", "release from main only")
     source = git("rev-parse", "HEAD")
     git("fetch", "--no-recurse-submodules", "origin", "main", "--tags")
     requested = settings["version"]
@@ -269,7 +271,10 @@ def plan(settings):
                 "release tag is not in main history")
         source = commit
     else:
-        require(git("rev-parse", "origin/main") == source, "main advanced since dispatch; run again from the current head")
+        # Read-only evidence may validate an immutable checkout after main moves.
+        # Publication still requires current main here and again before ref updates.
+        require(settings["dry_run"] is True or git("rev-parse", "origin/main") == source,
+                "main advanced since dispatch; run again from the current head")
         require(version != root_version() or not git("tag", "--list", "v*"),
                 "unchanged version is only allowed for an unpublished first release or exact-tag resume")
         commit = candidate(version, source)

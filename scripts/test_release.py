@@ -169,6 +169,65 @@ checksum = "preserved-plugin"
         self.assertEqual(self.git("ls-remote", "origin", "refs/heads/main").split()[0], other)
         self.assertFalse(release.tag_exists("v0.2.0"))
 
+    def test_stale_checkout_is_allowed_only_for_read_only_planning(self):
+        Path("concurrent.txt").write_text("new main commit")
+        self.git("add", ".")
+        self.git("commit", "-qm", "concurrent")
+        other = self.git("rev-parse", "HEAD")
+        self.git("push", "-q", "origin", "HEAD:main")
+        self.git("checkout", "--detach", self.source)
+        with patch.dict(os.environ, {"GITHUB_REPOSITORY": release.REPOSITORY,
+                                     "GITHUB_REF": "refs/heads/main"}):
+            for dry_run in (False, True):
+                settings = {"bump": "minor", "version": "", "dry_run": dry_run}
+                with self.subTest(dry_run=dry_run), \
+                        patch.object(release, "registry_preflight") as preflight, \
+                        patch.object(release, "emit") as emit:
+                    if dry_run:
+                        release.plan(settings)
+                        planned = emit.call_args.kwargs
+                        self.assertEqual(planned["source"], self.source)
+                        self.assertEqual(planned["candidate"], self.git("rev-parse", "HEAD"))
+                        self.assertEqual(self.git("rev-parse", "HEAD^"), self.source)
+                        self.assertTrue(planned["dry_run"])
+                        preflight.assert_called_once_with("0.2.0", False)
+                        # A dry-run candidate can never bypass the publication guard.
+                        with self.assertRaisesRegex(ValueError, "main advanced"):
+                            release.push_release("0.2.0", self.source, planned["candidate"], False)
+                    else:
+                        with self.assertRaisesRegex(ValueError, "main advanced"):
+                            release.plan(settings)
+                        self.assertEqual(self.git("rev-parse", "HEAD"), self.source)
+                        preflight.assert_not_called()
+                        emit.assert_not_called()
+                    self.assertEqual(self.git("ls-remote", "origin", "refs/heads/main").split()[0], other)
+                    self.assertFalse(release.tag_exists("v0.2.0"))
+
+    def test_pr_and_fork_plans_are_read_only(self):
+        contexts = [(release.REPOSITORY, "refs/pull/7/merge", "main only"),
+                    ("contributor/zharness", "refs/heads/main", "owning repository"),
+                    ("contributor/zharness", "refs/pull/7/merge", "owning repository")]
+        for repository, ref, error in contexts:
+            self.git("checkout", "--detach", self.source)
+            with patch.dict(os.environ, {"GITHUB_REPOSITORY": repository, "GITHUB_REF": ref}), \
+                    self.subTest(repository=repository, ref=ref), \
+                    patch.object(release, "registry_preflight") as preflight, \
+                    patch.object(release, "emit") as emit:
+                settings = {"bump": "minor", "version": "", "dry_run": False}
+                with self.assertRaisesRegex(ValueError, error):
+                    release.plan(settings)
+                self.assertEqual(self.git("rev-parse", "HEAD"), self.source)
+                preflight.assert_not_called()
+                emit.assert_not_called()
+                release.plan(dict(settings, dry_run=True))
+                planned = emit.call_args.kwargs
+                self.assertEqual(planned["source"], self.source)
+                self.assertEqual(planned["candidate"], self.git("rev-parse", "HEAD"))
+                self.assertTrue(planned["dry_run"])
+                preflight.assert_called_once_with("0.2.0", False)
+                self.assertEqual(self.git("ls-remote", "origin", "refs/heads/main").split()[0], self.source)
+                self.assertFalse(release.tag_exists("v0.2.0"))
+
     def test_package_hashes_require_exact_clean_commit_and_registry_sources(self):
         commit = release.candidate("0.2.0", self.source)
         path = Path("target/package/zharness-0.2.0.crate")

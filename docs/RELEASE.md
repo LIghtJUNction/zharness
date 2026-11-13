@@ -74,4 +74,7 @@ python3 scripts/release.py plan --bump minor --dry-run true
 The plan requires a clean checkout. Full benchmark measurements are separate
 from validation smoke runs; see the recorded performance report for flags,
 samples and environment. The Evidence workflow performs validation and records
-data without registry write credentials.
+data without registry write credentials. Read-only dry runs may validate an
+immutable PR/fork checkout or an earlier main commit; they never push refs.
+Real publication still requires the owning repository, main, and an unchanged
+remote source commit, checked again before the atomic push.
