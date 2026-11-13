@@ -118,7 +118,7 @@ checksum = "e57ba714b29974daee2aacee58e9c43a1467e4eadb1afc9b8f2f2c9e64b4d6f4"
 
 [[package]]
 name = "zharness"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "zcall",
  "zplugin",

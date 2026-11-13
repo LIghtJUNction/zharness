@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [0.4.0] - 2026-11-13
 
 - Upgrade the native plugin dependency to published zplugin 0.3.0; retain current
   zcall 0.2.0 / zconv 0.3.0 and refresh all compatible lockfile dependencies.
