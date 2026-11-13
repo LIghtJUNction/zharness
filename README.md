@@ -3,26 +3,29 @@
 Caller-buffered primitives for developer-owned AI harnesses: context windows,
 model/tool turns, hooks, output transforms and multi-agent coordination. The core
 is `no_std`, forbids handwritten unsafe Rust and directly depends on
-`zcall = "=0.1.2"` and `zplugin = "=0.1.0"` with default features disabled.
+`zcall = "=0.2.0"` and `zplugin = "=0.3.0"` with default features disabled.
 zplugin's official macro generates the native interface and introduces
-compilation-only parser dependencies; the runtime dependency graph stays within
-Project Z crates.
+compilation-only parser dependencies. The default/native runtime graph stays
+within Project Z crates; the explicit `wasm` feature adds zplugin's Wasmi sandbox.
 
-Version 0.2.4 adds native skills and zplugin extensions alongside the typed
-lifecycle channels and conversation, model-settings, request-send and response
-adapters introduced in 0.2.3. Existing Hooks implementations and lifecycle enum
-variants remain source-compatible. The library itself does not start an HTTP
-client or agent runtime.
+Version 0.4.0 integrates trusted native and untrusted Wasm plugins with named
+operations, mixed-backend routing, explicit disabling/replacement and existing
+authorization hooks. It retains skills, typed lifecycle channels, provider-bound
+tool signatures and conversation/model/request/response primitives. The library
+does not start an HTTP client or agent runtime. Development uses Rust 1.100.0;
+MSRV remains 1.99.1, edition 2024.
 
 To use the published package:
 
 ```toml
 [dependencies]
-zharness = "=0.2.4"
+zharness = "=0.4.0"
 ```
 
 Default features enable filesystem skill discovery and native path loading.
 Set `default-features = false` to use the `no_std` core.
+Add `features = ["wasm"]` for sandboxed plugins. This feature needs an allocator
+but does not imply `std`; native plugin loading continues to require trusted code.
 
 ## Boundary
 
@@ -45,7 +48,8 @@ integration directory or cross-repository build dependency.
 | `output` | Caller-buffered text reduction and validated JSON minification |
 | `cluster` | Capability matching, task dependencies, leases, handoff, joins and bounded mailboxes |
 | `skills` | Borrowed SKILL.md metadata, caller-buffered summaries, ordered directories and on-demand loading |
-| `plugin` | zplugin native loader, versioned byte-call interface, checked outputs and an Executor bridge |
+| `plugin` | Trusted native loading, explicit mixed-plugin routes, checked outputs and an Executor bridge |
+| `plugin::wasm` | Optional untrusted Wasm loading, named operation allowlists, execution limits and safe replacement |
 | `tools`, `validation`, `bridge` | Tool definitions, argument policy and public zcall result APIs |
 
 ## Native extensions
@@ -60,6 +64,36 @@ The library checks returned lengths and can validate UTF-8; the application owns
 operation semantics, payload schemas, scheduling, permissions and recovery.
 There is no automatic plugin scan, tool registration, execution or reload loop.
 See [PLUGINS.md](PLUGINS.md) for loading, plugin authoring, lifecycle and examples.
+
+## Untrusted Wasm and mixed plugin tools
+
+Enable `wasm`, then use `plugin::wasm::WasmExtension::load` with an explicit
+interface ID/version, resource limits and a host-owned name-to-operation map.
+The safe loader accepts zplugin's import-free Wasm32 protocol. It denies WASI,
+filesystem/network/host imports, checks memory ranges and meters execution fuel.
+The adapter implements the same `Executor` used by native extension proxies.
+
+`plugin::Router` borrows explicit `Route` and `Slot` arrays. A public tool name
+selects a slot and backend operation; `set_enabled` denies a slot without invoking
+it, and `replace` switches a previously validated executor at a call boundary.
+Execute through `Prepared::execute_with_hooks` to authorize the public tool name
+before routing. Unknown or disabled tools fail closed, with no fallback or retry.
+
+```sh
+rustup target add wasm32-unknown-unknown
+python3 scripts/wasm.py
+```
+
+This builds a real allocator-free guest and runs both a sandbox-only host and a
+host routing tools to native and Wasm plugins. `WasmExtension::reload` validates
+a fresh same-interface instance before replacement; failure retains the current
+state. Runtime failures preserve detailed diagnostics through `last_error()`.
+
+Wasm is a separate synchronous byte-buffer ABI. Native tasks, pointers, resources
+and callbacks are not forwarded into it. Isolation depends on the Wasm engine;
+guest-memory limits do not cap process RSS, and fuel does not time module
+compilation. Use additional process isolation for stricter resource/threat models.
+See [the complete contracts and examples](PLUGINS.md).
 
 ## Native skills
 

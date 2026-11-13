@@ -22,7 +22,9 @@ for line in build.stdout.splitlines():
 if len(libraries) != 1:
     raise RuntimeError('Cargo did not report exactly one native plugin library')
 for example in sorted((root / 'examples').glob('*.rs')):
-    if example.stem == 'native_plugin':
+    # The Wasm runner builds its independent guest and gives both hosts the
+    # required artifact paths; they are not standalone no-argument programs.
+    if example.stem in {'native_plugin', 'wasm_host', 'mixed_plugin_host'}:
         continue
     command = ['cargo', 'run', '--locked', '--example', example.stem]
     if example.stem == 'plugin_host':

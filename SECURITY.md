@@ -32,6 +32,23 @@ and never automatically retry side effects to obtain a larger buffer. The
 Executor bridge preserves the caller's tool registry and hook decisions; native
 code itself runs with the host process's privileges.
 
+The explicit wasm feature accepts untrusted binary modules through zplugin's
+validated, import-free Wasm32 protocol. Guest code receives checked byte buffers,
+not host pointers or capabilities. Memory/table/stack/fuel limits are mandatory;
+traps poison the instance, and unknown operation names do not enter it. Detailed
+engine diagnostics remain in the adapter while normal harness errors stay Copy.
+Use Prepared execution hooks to authorize routed public names; direct adapter
+calls deliberately remain low-level application operations.
+
+Wasm isolation depends on the engine and does not impose a process-wide RSS cap
+or compilation wall-clock deadline. Bound source reads, compilation rate and the
+number of instances, and add OS process isolation when required by the threat
+model. Do not reuse a stateful plugin across confidential tenants: it can retain
+prior inputs. Sandbox loading grants no WASI/network/filesystem/clock/host calls.
+Native async tasks, callbacks and resources are not automatically bridged to Wasm.
+Replacing an instance validates its module/interface first; initialization and
+state migration at the business level remain explicit host decisions.
+
 Context token counts are supplied by the application and may be estimates. Reserve
 for output and request overhead, and recompute for the target model. An incorrect
 cost cannot be turned into a hard model-context guarantee. Keep call/result groups

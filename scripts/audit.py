@@ -1,65 +1,100 @@
-"""Fail closed on extra dependencies, source overrides or sibling-repository coupling."""
+"""Fail closed on unreviewed dependencies and distinguish optional Wasm runtime costs."""
+
 import json
-import pathlib
+from pathlib import Path
 import subprocess
 import tomllib
 
-root = pathlib.Path(__file__).resolve().parents[1]
-manifest = tomllib.loads((root / 'Cargo.toml').read_text())
-assert not (root / 'build.rs').exists(), 'build.rs is forbidden'
-assert not (root / 'integration').exists(), 'MCP integration belongs to its own repository'
-pins = {'zcall': '=0.2.0', 'zplugin': '=0.1.0'}
-assert set(manifest.get('dependencies', {})) == set(pins)
-for name, version in pins.items():
-    dep = manifest['dependencies'][name]
-    assert dep['version'] == version and dep.get('default-features') is False
-    assert not any(k in dep for k in ('path', 'git', 'optional'))
-assert manifest['dependencies']['zplugin']['features'] == ['macros']
-assert manifest['features']['std'] == ['zplugin/std']
-assert not manifest.get('dev-dependencies') and not manifest.get('build-dependencies')
-assert not manifest.get('target'), 'target-specific dependency sections require review'
-for workflow in (root / '.github/workflows').glob('*.yml'):
-    content = workflow.read_text()
-    assert 'integration/mcp' not in content, workflow.name
-    assert 'repository: LIghtJUNction/zmcp' not in content, workflow.name
-m = json.loads(subprocess.check_output(['cargo', 'metadata', '--locked', '--format-version', '1'], cwd=root))
-runtime_names = {'zharness', 'zcall', 'zconv', 'zplugin'}
-macro_names = {'zplugin-macros', 'syn', 'quote', 'proc-macro2', 'unicode-ident'}
-assert {p['name'] for p in m['packages']} == runtime_names | macro_names
-package = next(p for p in m['packages'] if p['name'] == 'zharness')
-assert len(package['dependencies']) == len(pins)
-for dep in package['dependencies']:
-    assert dep['req'] == pins[dep['name']]
-    assert not dep['uses_default_features']
-assert package['version'] == manifest['package']['version']
-zcall = next(p for p in m['packages'] if p['name'] == 'zcall')
-zconv = next(p for p in m['packages'] if p['name'] == 'zconv')
-assert zcall['version'] == '0.2.0' and zconv['version'] == '0.3.0'
-for name in ('zplugin', 'zplugin-macros'):
-    assert next(p for p in m['packages'] if p['name'] == name)['version'] == '0.1.0'
-for package in m['packages']:
-    if package['name'] != 'zharness':
-        assert package['source'] == 'registry+https://github.com/rust-lang/crates.io-index'
+ROOT = Path(__file__).resolve().parents[1]
+PINS = {"zcall": "=0.2.0", "zplugin": "=0.3.0"}
+NATIVE = {"zharness", "zcall", "zconv", "zplugin"}
+MACROS = {"zplugin-macros", "syn", "quote", "proc-macro2", "unicode-ident"}
+WASM = {"wasmi", "wasmi_core", "wasmi_ir", "wasmi_collections",
+        "wasmparser", "spin", "libm", "bitflags"}
+REGISTRY = "registry+https://github.com/rust-lang/crates.io-index"
 
-# A normal dependency on a proc-macro package executes on the compiler host,
-# not in the application's runtime. Check that boundary instead of hiding the
-# macro's compilation dependencies in the runtime claim.
-packages = {p['id']: p for p in m['packages']}
-nodes = {n['id']: n for n in m['resolve']['nodes']}
-seen = set()
-pending = [m['resolve']['root']]
-while pending:
-    identifier = pending.pop()
-    if identifier in seen:
-        continue
-    seen.add(identifier)
-    for dep in nodes[identifier]['deps']:
-        target = packages[dep['pkg']]
-        if any('proc-macro' in t['kind'] for t in target['targets']):
+
+def validate_manifest(manifest):
+    assert set(manifest.get("dependencies", {})) == set(PINS)
+    for name, version in PINS.items():
+        dependency = manifest["dependencies"][name]
+        assert dependency["version"] == version and dependency.get("default-features") is False
+        assert not any(key in dependency for key in ("path", "git", "optional"))
+    assert manifest["dependencies"]["zplugin"]["features"] == ["macros"]
+    assert manifest["features"] == {
+        "default": ["std"], "std": ["zplugin/std"], "wasm": ["zplugin/wasm"]}
+    assert not manifest.get("dev-dependencies") and not manifest.get("build-dependencies")
+    assert not manifest.get("target"), "target-specific dependencies require review"
+
+
+def runtime_names(metadata):
+    """Follow normal dependencies, stopping at compiler-only proc-macro targets."""
+    packages = {p["id"]: p for p in metadata["packages"]}
+    nodes = {n["id"]: n for n in metadata["resolve"]["nodes"]}
+    seen, pending = set(), [metadata["resolve"]["root"]]
+    while pending:
+        identifier = pending.pop()
+        if identifier in seen:
             continue
-        if any(kind['kind'] is None for kind in dep['dep_kinds']):
-            pending.append(dep['pkg'])
-assert {packages[identifier]['name'] for identifier in seen} == runtime_names
-print(f"Dependency audit passed: zharness {manifest['package']['version']}; "
-      "runtime zcall 0.2.0 / zconv 0.3.0 / zplugin 0.1.0; "
-      "zplugin-macros and its parser dependencies are compilation-only")
+        seen.add(identifier)
+        for dependency in nodes[identifier]["deps"]:
+            target = packages[dependency["pkg"]]
+            if any("proc-macro" in target["kind"] for target in target["targets"]):
+                continue
+            if any(kind["kind"] is None for kind in dependency["dep_kinds"]):
+                pending.append(dependency["pkg"])
+    return {packages[identifier]["name"] for identifier in seen}
+
+
+def validate_metadata(metadata, manifest, wasm):
+    expected_runtime = NATIVE | (WASM if wasm else set())
+    assert {p["name"] for p in metadata["packages"]} == expected_runtime | MACROS
+    assert runtime_names(metadata) == expected_runtime
+    packages = {p["name"]: p for p in metadata["packages"]}
+    root = packages["zharness"]
+    assert len(root["dependencies"]) == len(PINS)
+    assert root["version"] == manifest["package"]["version"]
+    for dependency in root["dependencies"]:
+        assert dependency["req"] == PINS[dependency["name"]]
+        assert not dependency["uses_default_features"]
+    for name, expected in {"zcall": "0.2.0", "zconv": "0.3.0",
+                           "zplugin": "0.3.0", "zplugin-macros": "0.3.0"}.items():
+        assert packages[name]["version"] == expected, (name, packages[name]["version"])
+    if wasm:
+        assert packages["wasmi"]["version"] == "2.0.0"
+    for name, package in packages.items():
+        if name != "zharness":
+            assert package["source"] == REGISTRY, name
+    return sorted(expected_runtime)
+
+
+def main():
+    manifest = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))
+    validate_manifest(manifest)
+    assert not (ROOT / "build.rs").exists(), "build.rs is forbidden"
+    assert not (ROOT / "integration").exists(), "MCP integration belongs in its own repository"
+    for workflow in (ROOT / ".github/workflows").glob("*.yml"):
+        content = workflow.read_text(encoding="utf-8")
+        assert "integration/mcp" not in content and "repository: LIghtJUNction/zmcp" not in content
+    cases = [
+        ("core", ["--no-default-features"], False),
+        ("default", [], False),
+        ("wasm-no-std", ["--no-default-features", "--features", "wasm"], True),
+        ("all", ["--all-features"], True),
+    ]
+    evidence = []
+    for name, features, wasm in cases:
+        metadata = json.loads(subprocess.check_output(
+            ["cargo", "metadata", "--locked", "--format-version", "1", *features],
+            cwd=ROOT, text=True, encoding="utf-8"))
+        closure = validate_metadata(metadata, manifest, wasm)
+        evidence.append({"configuration": name, "runtime_packages": closure,
+                         "third_party_runtime_packages": len(WASM) if wasm else 0})
+    print(json.dumps({"result": "pass", "crate": "zharness",
+                      "version": manifest["package"]["version"],
+                      "compilation_only_packages": sorted(MACROS),
+                      "configurations": evidence}, indent=2))
+
+
+if __name__ == "__main__":
+    main()

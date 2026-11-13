@@ -1,6 +1,8 @@
-name: Native harness evidence
+name: Harness performance evidence
 on:
   push:
+    branches: [main]
+    paths-ignore: [.github/release-request.json]
   pull_request:
   workflow_dispatch:
 permissions:
@@ -11,15 +13,22 @@ concurrency:
 jobs:
   evidence:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     env:
       ZHARNESS_BENCH_SMOKE: '1'
+      RUSTUP_TOOLCHAIN: stable
+      PYTHONUTF8: '1'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
       - run: |
-          rustup toolchain install 1.99.1 --profile minimal
-          rustup default 1.99.1
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+          rustup target add wasm32-unknown-unknown
       - name: Capture source, environment and full component benchmarks
         run: |
           mkdir -p "$RUNNER_TEMP/zharness-evidence"
@@ -36,33 +45,26 @@ jobs:
           cargo bench --locked --bench lifecycle > "$RUNNER_TEMP/zharness-evidence/lifecycle-benchmark.csv"
           cargo bench --locked --bench skills > "$RUNNER_TEMP/zharness-evidence/skills-benchmark.csv"
           cargo bench --locked --bench plugins > "$RUNNER_TEMP/zharness-evidence/plugins-benchmark.csv"
+          python scripts/wasm_bench.py --output "$RUNNER_TEMP/zharness-evidence/wasm"
           cat "$RUNNER_TEMP/zharness-evidence/lifecycle-benchmark.csv"
           git archive --format=tar.gz -o "$RUNNER_TEMP/zharness-evidence/source.tar.gz" HEAD
       - name: Preserve unmodified source test evidence
         run: |
           set -euo pipefail
-          cargo test --locked --lib --tests -- --test-threads=1 | tee "$RUNNER_TEMP/zharness-evidence/tests.txt"
-          cargo test --locked --doc | tee "$RUNNER_TEMP/zharness-evidence/doctests.txt"
+          cargo test --locked --all-features --lib --tests -- --test-threads=1 | tee "$RUNNER_TEMP/zharness-evidence/tests.txt"
+          cargo test --locked --all-features --doc | tee "$RUNNER_TEMP/zharness-evidence/doctests.txt"
           python scripts/examples.py
-          python scripts/test_release.py
+          python scripts/wasm.py
+          python -m unittest discover -s scripts -p 'test_*.py' -v
       - id: candidate
-        env:
-          BUMP: patch
-          PUBLISH: 'false'
-        run: python scripts/release.py plan
+        run: python scripts/release.py plan --bump patch --dry-run true
       - name: Validate the next candidate without publishing
         env:
           VERSION: ${{ steps.candidate.outputs.version }}
         run: |
-          python scripts/release.py apply
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add Cargo.toml Cargo.lock
-          if ! git diff --cached --quiet; then git commit -m 'ci: validate unpublished candidate'; fi
-          cargo test --locked --release --all-targets
+          cargo test --locked --release --all-targets --all-features
           python scripts/audit.py
-          cargo package --locked
-          cargo publish --dry-run --locked
+          python scripts/release.py packages --version "$VERSION"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: zharness-evidence-${{ github.sha }}

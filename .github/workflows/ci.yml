@@ -1,45 +1,134 @@
 name: CI
+
 on:
   push:
+    branches: [main]
+    # Release requests execute the same jobs via workflow_call.
+    paths-ignore: [.github/release-request.json]
   pull_request:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      source:
+        type: string
+        default: ''
+      candidate:
+        type: string
+        default: ''
+      version:
+        type: string
+        default: ''
+
 permissions:
   contents: read
+
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  group: ci-${{ github.workflow }}-${{ github.ref }}-${{ inputs.candidate }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: '1'
+  RUSTDOCFLAGS: -D warnings
+  PYTHONUTF8: '1'
+
 jobs:
   test:
+    name: ${{ matrix.os }} / Rust ${{ matrix.rust }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         rust: [stable, '1.99.1']
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
     env:
+      RUSTUP_TOOLCHAIN: ${{ matrix.rust }}
       ZHARNESS_BENCH_SMOKE: '1'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.source || github.sha }}
+          fetch-depth: 0
           persist-credentials: false
-      - name: Install Rust
+      - run: git config core.autocrlf false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Reconstruct the exact release candidate
+        if: inputs.version != ''
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_SOURCE: ${{ inputs.source }}
+          RELEASE_CANDIDATE: ${{ inputs.candidate }}
+        run: python scripts/release.py candidate --version "$RELEASE_VERSION" --source "$RELEASE_SOURCE" --expected "$RELEASE_CANDIDATE"
+      - name: Install Rust and the independent guest target
+        env:
+          RUST_VERSION: ${{ matrix.rust }}
         run: |
-          rustup toolchain install ${{ matrix.rust }} --profile minimal --component rustfmt,clippy
-          rustup default ${{ matrix.rust }}
-      - run: cargo fmt --all -- --check
-      - run: cargo clippy --locked --all-targets --all-features -- -D warnings
-      - run: cargo test --locked --all-targets
-      - run: cargo test --locked --all-targets --release
-      - run: cargo test --locked --doc
-      - run: python scripts/examples.py
-      - run: python scripts/test_release.py
-      - run: cargo check --locked --no-default-features
-      - run: cargo run --locked --no-default-features --example skills
-      - name: WASM no_std
-        if: matrix.os == 'ubuntu-latest'
-        run: |
+          rustup toolchain install "$RUST_VERSION" --profile minimal --component rustfmt --component clippy
           rustup target add wasm32-unknown-unknown
-          cargo check --locked --target wasm32-unknown-unknown --no-default-features
-      - run: python scripts/audit.py
-      - run: cargo bench --locked --benches
-      - run: cargo package --locked
+          rustc -Vv
+      - name: All features, real native/Wasm plugins, examples and benchmark smoke
+        run: python scripts/check.py
+      - name: Verify the actual package archive
+        if: matrix.rust == 'stable'
+        run: python scripts/release.py packages
+      - name: Preserve actual platform verification
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: verification-${{ matrix.os }}-${{ matrix.rust }}-${{ github.run_attempt }}
+          path: |
+            target/evidence/*.json
+            artifacts/wasm*.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+  portability:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RUSTUP_TOOLCHAIN: '1.99.1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Reconstruct the exact release candidate
+        if: inputs.version != ''
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_SOURCE: ${{ inputs.source }}
+          RELEASE_CANDIDATE: ${{ inputs.candidate }}
+        run: python scripts/release.py candidate --version "$RELEASE_VERSION" --source "$RELEASE_SOURCE" --expected "$RELEASE_CANDIDATE"
+      - name: Install independent toolchains and no_std targets
+        run: |
+          rustup toolchain install 1.99.1 --profile minimal --component rustfmt
+          rustup toolchain install stable --profile minimal --component rustfmt
+          rustup target add wasm32-unknown-unknown thumbv7em-none-eabi
+          rustup target add --toolchain stable wasm32-unknown-unknown
+      - name: Core and opt-in Wasm host remain no_std
+        run: |
+          cargo check --locked --no-default-features --target wasm32-unknown-unknown
+          cargo check --locked --no-default-features --target thumbv7em-none-eabi
+          cargo check --locked --no-default-features --features wasm --target thumbv7em-none-eabi
+      - name: Independently compile guest and host with different Rust versions
+        run: |
+          python scripts/wasm.py --guest-toolchain stable
+          python scripts/wasm.py --host-toolchain stable
+      - name: Preserve cross-compiler evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: verification-portability-${{ github.run_attempt }}
+          path: artifacts/wasm*.json
+          if-no-files-found: ignore
+          retention-days: 30

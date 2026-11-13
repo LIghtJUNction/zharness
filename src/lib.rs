@@ -77,6 +77,10 @@ pub enum Error {
     /// A native plugin failed to load, bind, create or execute. Preserve its
     /// original status; a call failure does not imply side-effect rollback.
     Plugin(zplugin::Error),
+    /// A sandbox call failed. The plugin adapter retains the complete diagnostic
+    /// in `WasmExtension::last_error`; this classification stays bounded and Copy.
+    #[cfg(feature = "wasm")]
+    Wasm(plugin::wasm::Fault),
 }
 impl From<zcall::v1::Error> for Error {
     fn from(value: zcall::v1::Error) -> Self {

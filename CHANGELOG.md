@@ -1,6 +1,24 @@
 # Changelog
 
-## 0.3.0 (unreleased)
+## Unreleased
+
+- Upgrade the native plugin dependency to published zplugin 0.3.0; retain current
+  zcall 0.2.0 / zconv 0.3.0 and refresh all compatible lockfile dependencies.
+- Add an explicit `wasm` feature: import-free Wasm loading, named operation
+  allowlists, the existing Executor/hook boundary, detailed sandbox diagnostics
+  and validated replacement that preserves the active instance on failure.
+- Add caller-owned Route/Slot/Router primitives for mixed native/Wasm tools,
+  explicit enable/disable and replacement without discovery, fallback or retries.
+- Preserve Copy harness errors, no_std core and the frozen native Extension v1
+  contract. Default/native graphs retain only Project Z runtime dependencies;
+  optional Wasm execution uses zplugin's Wasmi backend and its bounded resources.
+- Add independent real guests, mixed-backend examples, adversarial lifecycle
+  regressions and matched Wasm adapter/Executor/Router benchmarks.
+- Use Rust 1.100.0 for development, retain MSRV 1.99.1 and validate both on
+  Linux/macOS/Windows. Release validates one reproducible version commit, with
+  custom/dry-run controls, immutable tags and checksum-checked recovery.
+
+## 0.3.0 — 2026-11-12
 
 - Target zcall 0.2.0 and its zconv 0.3.0 dependency; update exact dependency audit expectations.
 - Map images, grounding, continuation and stop sequences to distinct response lifecycle actions, retaining source choice and payload.

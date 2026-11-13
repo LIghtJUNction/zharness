@@ -9,15 +9,16 @@ repository = "https://github.com/LIghtJUNction/zharness"
 readme = "README.md"
 keywords = ["ai", "harness", "tool-calling", "agents", "no-std"]
 categories = ["api-bindings", "development-tools"]
-include = ["src/**", "tests/**", "examples/**", "benches/**", "docs/**", "*.md", "LICENSE-*", "Cargo.toml", "Cargo.lock"]
+include = ["src/**", "tests/**", "examples/**", "benches/**", "scripts/*.py", "docs/**", "*.md", "LICENSE-*", "Cargo.toml", "Cargo.lock"]
 
 [dependencies]
 zcall = { version = "=0.2.0", default-features = false }
-zplugin = { version = "=0.1.0", default-features = false, features = ["macros"] }
+zplugin = { version = "=0.3.0", default-features = false, features = ["macros"] }
 
 [features]
 default = ["std"]
 std = ["zplugin/std"]
+wasm = ["zplugin/wasm"]
 
 [dev-dependencies]
 
@@ -60,6 +61,11 @@ name = "plugins"
 harness = false
 required-features = ["std"]
 
+[[bench]]
+name = "wasm_plugins"
+harness = false
+required-features = ["std", "wasm"]
+
 [[example]]
 name = "native_plugin"
 crate-type = ["cdylib"]
@@ -76,3 +82,11 @@ required-features = ["std"]
 [[example]]
 name = "plugin_host"
 required-features = ["std"]
+
+[[example]]
+name = "wasm_host"
+required-features = ["std", "wasm"]
+
+[[example]]
+name = "mixed_plugin_host"
+required-features = ["std", "wasm"]

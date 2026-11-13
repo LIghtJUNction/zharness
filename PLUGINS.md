@@ -1,10 +1,10 @@
-# Native plugin primitives
+# Native and Wasm plugin primitives
 
-The `plugin` module connects zharness to zplugin's native library loader and
-versioned interfaces. It provides one small byte-call contract, checked output
-views and an adapter to the existing `Executor` boundary. A plugin implements
-its operations; the host chooses its files, operation names, payload encoding,
-tool metadata, permissions and scheduling.
+The `plugin` module connects zharness to zplugin 0.3.0. Trusted native libraries
+use the frozen Extension v1 interface; optional untrusted Wasm modules use a
+separate bounded byte-buffer protocol. Both adapt to the existing `Executor`
+boundary and caller-owned routes. A plugin implements its operations; the host
+chooses files, interface versions, operation maps, tool metadata and permissions.
 
 The module is available in the `no_std` core. The default `std` feature forwards
 to `zplugin/std` for native path handling and plugin-side panic containment.
@@ -104,8 +104,8 @@ dependency; this does not create a second runtime copy inside one crate graph.
 crate-type = ["cdylib"]
 
 [dependencies]
-zharness = "=0.2.4"
-zplugin = { version = "=0.1.0", default-features = false, features = ["std", "macros"] }
+zharness = "=0.4.0"
+zplugin = { version = "=0.3.0", default-features = false, features = ["std", "macros"] }
 ```
 
 The following complete export uses the pinned lifetime policy:
@@ -209,15 +209,124 @@ Calling `call_bytes` directly intentionally bypasses that tool boundary, so the
 host must place any desired policy or lifecycle wrapper around the direct call.
 Nothing automatically registers plugin operations as model-visible tools.
 
+## Load untrusted Wasm operations
+
+Enable the explicit `wasm` feature. It forwards to `zplugin/wasm`, implies an
+allocator and does not enable `std`. `WasmExtension` owns one sandbox and borrows
+a host-approved operation map. The map translates names used by Executor to the
+numeric operation codes defined by the plugin interface; application arguments
+remain the original bytes, with no additional serialization envelope.
+
+```rust,no_run
+# #[cfg(feature = "wasm")]
+fn load(module: &[u8]) -> Result<zharness::plugin::wasm::WasmExtension<'static>,
+                               zharness::plugin::wasm::LoadError> {
+    use zharness::plugin::wasm::{Interface, Limits, Operation, WasmExtension};
+    static OPERATIONS: [Operation<'static>; 2] = [
+        Operation::new("echo", 0),
+        Operation::new("uppercase", 1),
+    ];
+    WasmExtension::load(
+        module,
+        Interface { id: 0x7a6861726e657373, version: 1 },
+        &OPERATIONS,
+        Limits::default(),
+    )
+}
+```
+
+Names obey the same bounded ASCII rules as tool names. Duplicate names fail
+before module parsing; numeric aliases are permitted explicitly. Unknown names
+return `UnknownTool` without executing guest code. The map is an allowlist of
+callable entry points, not a grant of host capabilities or proof of module
+identity. Model-visible tool metadata still comes from the caller's Registry.
+
+`call_bytes` returns a checked prefix of caller storage. `call_text` and Executor
+also validate UTF-8. Engine errors leave host output unchanged; invalid UTF-8 is
+a host text-contract error after a successful byte copy, so discard that output.
+Business errors preserve their guest status and do not automatically poison the
+instance. Traps, fuel exhaustion and invalid success lengths invalidate it.
+
+`zharness::Error` remains `Copy`. Execution hooks receive `Error::Wasm(Fault)`
+with a bounded classification and status/length details. `last_error()` borrows
+the original zplugin diagnostic, including trap text; it is cleared before each
+call attempt and after successful replacement. Constructor `LoadError` preserves
+the full validation/interface error, separate from invalid host configuration.
+
+`reload(module, limits)` constructs a new instance with the same interface before
+replacing the active one. A failed load keeps the old instance and diagnostic;
+success resets guest state and drops the old sandbox without running guest
+destructors. For business-specific initialization or state migration, load and
+test a separate candidate first, then replace its Router slot. No retry, state
+migration, background task or unbounded old-generation list is created.
+
+The [guest](examples/wasm/guest.rs) uses the core SDK re-exported by zharness,
+const state and fixed scratch buffers. It is independently compiled for
+`wasm32-unknown-unknown`, with `panic=abort` and no allocator. Its operations are
+examples, not built-in harness tools. The [sandbox host](examples/wasm_host.rs)
+bounds file reads before loading. Run it and the mixed-backend host with:
+
+```sh
+rustup target add wasm32-unknown-unknown
+python3 scripts/wasm.py
+```
+
+## Compose, disable and replace plugin executors
+
+`Route::new(public_name, slot_index, backend_operation)` and `Slot::new(executor)`
+describe caller-owned routing. `Router::new(&routes, &mut slots)` validates all
+names, duplicate public names and target indices before construction. The Router
+borrows existing native proxies, Wasm instances or application executors, so their
+resources outlive routed calls. It does not load files or infer trust from suffixes.
+
+`set_enabled(index, false)` makes all routes to that slot return `Denied` without
+touching output or invoking the plugin. `replace(index, candidate)` returns the
+old executor borrow and preserves the slot's enabled state. Invalid indices do
+not change an existing slot. Configure aliases by adding routes to the same slot;
+there is no catch-all route, automatic fallback or retry after failure.
+
+Execution hooks observe and authorize the public tool name before mapping, while
+the target receives its backend operation name. Original arguments, call IDs,
+business-result flags and errors retain the existing Executor contract. A direct
+`Router::execute` call is an application-level call and bypasses Prepared hooks.
+The [mixed host](examples/mixed_plugin_host.rs) exercises both plugin backends,
+explicit disabling and request-boundary routing.
+
+## Wasm trust and resource policy
+
+The sandbox accepts zplugin's core Wasm32 v1 protocol and rejects all imports,
+start sections, shared/memory64/multiple memories and incompatible interfaces.
+No WASI, filesystem, network, environment, clock, process or host callback API is
+linked. Default limits are 4 MiB module bytes, 16 MiB guest linear memory,
+4,096 table elements, 1 MiB input/output capacities, 10 million fuel per call,
+64 KiB interpreter value stack and 128 call depth. Hosts can choose tighter limits.
+
+Limits cover guest resources, not total process RSS or compilation wall time.
+The engine, parser, allocator and application remain trusted components. Add OS
+process/container limits for stronger multi-tenant isolation. Bound file reads,
+compilation rate and resident instance counts. Instances retain prior inputs;
+use separate instances for distinct tenants or confidential sessions. Dropping an
+instance releases allocations without secure-erasure guarantees.
+
+Wasm calls are synchronous. zplugin's native async tasks, callbacks and owned
+resources remain available through the re-exported native APIs, but do not cross
+this sandbox protocol. Arbitrary WASI programs, JavaScript-importing wasm-bindgen
+modules and Component Model binaries are not accepted. Both native proxies and
+Wasm adapters use exclusive calls and remain `!Send + !Sync`.
+
 ## Errors, ownership and unloading
 
 | Boundary | Result |
 | --- | --- |
-| File loading or interface binding fails | Original `zplugin::Error` |
+| Native file loading or interface binding fails | Original `zplugin::Error` |
 | Native call fails | `zharness::Error::Plugin(original_error)` |
 | Returned count overflows `usize` or exceeds output capacity | `zharness::Error::InvalidOutput` |
 | `call_text` or executor receives invalid UTF-8 | `zharness::Error::InvalidOutput` |
 | Existing execution hook pauses or denies | Plugin is not called |
+| Invalid Wasm operation map | `plugin::wasm::LoadError::Configuration` |
+| Wasm loading/compatibility failure | Original error in `LoadError::Sandbox` |
+| Wasm call fails | Copy `Error::Wasm(Fault)` plus original `last_error()` |
+| Unknown route or disabled slot | `UnknownTool` or `Denied`, with no backend call |
 
 An error can follow partial output writes or external side effects. Discard the
 output for that failed call and decide recovery in the application. Increasing
@@ -254,13 +363,19 @@ native faults and foreign exceptions retain their process-level behavior.
 ## Dependencies and performance scope
 
 The direct runtime dependencies are the pinned Project Z crates `zcall` and
-`zplugin`. zplugin's official interface macro adds `zplugin-macros`, `syn`, `quote`,
+`zplugin`; zcall pins zconv 0.3.0. zplugin's official interface macro adds `zplugin-macros`, `syn`, `quote`,
 `proc-macro2` and `unicode-ident` to the compilation dependency graph. These macro
 dependencies are not additional runtime libraries. The handwritten zharness crate
 keeps `#![forbid(unsafe_code)]`; the generated FFI and zplugin's loader contain
 their own unsafe implementation, and the host explicitly accepts native loading.
 
-The call path uses a cached function table and caller storage. Host-side output
+With `wasm`, the runtime graph additionally contains Wasmi 2.0.0, wasmi_core,
+wasmi_ir, wasmi_collections, wasmparser 0.228.0, spin 0.9.9, libm 0.2.16 and
+bitflags 2.13.2. Default/native and optional Wasm graphs are audited separately.
+The lockfile uses the latest compatible versions: newer incompatible syn,
+wasmparser and spin release lines are not forced through upstream requirements.
+
+The native call path uses a cached function table and caller storage. Host-side output
 checking and UTF-8 validation do not allocate. Plugin initialization, a plugin's
 own operation implementation and the platform loader may allocate independently.
 
@@ -285,7 +400,8 @@ or model inference, and does not promise a fixed latency on every platform.
 
 ## References
 
-- [zplugin 0.1.0 public API](https://github.com/LIghtJUNction/zplugin/tree/v0.1.0)
-- [zplugin ABI and ownership contract](https://github.com/LIghtJUNction/zplugin/blob/v0.1.0/docs/abi.md)
+- [zplugin 0.3.0 public API](https://github.com/LIghtJUNction/zplugin/tree/v0.3.0)
+- [zplugin ABI and ownership contract](https://github.com/LIghtJUNction/zplugin/blob/v0.3.0/docs/abi.md)
+- [zplugin Wasm protocol and limits](https://github.com/LIghtJUNction/zplugin/blob/v0.3.0/docs/wasm.md)
 - [Runnable native plugin example](examples/native_plugin.rs)
 - [Runnable host example](examples/plugin_host.rs)

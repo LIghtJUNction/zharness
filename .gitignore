@@ -1,3 +1,4 @@
 /target/
+/artifacts/
 /comparison/target/
 /scripts/__pycache__/

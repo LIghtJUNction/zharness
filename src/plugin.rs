@@ -1,7 +1,7 @@
-//! Native extension loading, a versioned byte-call interface and an Executor bridge.
+//! Explicit plugin loading, versioned byte calls and caller-owned execution routes.
 //!
-//! [`Plugin`] is zplugin's actual loader: native loading remains an explicit
-//! unsafe operation in the host. After loading, [`ExtensionApi::create`] binds a
+//! [`Plugin`](crate::plugin::Plugin) is zplugin's actual loader: native loading remains an explicit
+//! unsafe operation in the host. After loading, [`ExtensionApi::create`](crate::plugin::ExtensionApi::create) binds a
 //! checked interface and creates an instance whose proxy borrows the library.
 //! The application owns operation names, payload formats, permission decisions,
 //! scheduling and lifecycle policy. No plugin discovery or execution is implicit.
@@ -9,6 +9,13 @@
 use crate::{Error, Executor, ToolOutput, validation::Arguments};
 
 pub use zplugin::{Plugin, UnloadPolicy};
+
+mod router;
+pub use router::{Route, Router, Slot};
+
+/// Optional import-free Wasm sandbox and named-operation Executor adapter.
+#[cfg(feature = "wasm")]
+pub mod wasm;
 
 /// A single synchronous extension point with caller-owned input and output.
 ///

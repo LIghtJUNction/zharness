@@ -5,6 +5,18 @@ use crate::{
     zcall::v1::{Json, JsonKind, Limits, Presence, Text, TokenStorage, ToolDefinition},
 };
 
+pub(crate) fn validate_name(name: &str) -> Result<(), Error> {
+    if name.is_empty()
+        || name.len() > 128
+        || !name.is_ascii()
+        || name.bytes().any(|b| b.is_ascii_control() || b == b' ')
+    {
+        Err(Error::InvalidTool)
+    } else {
+        Ok(())
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct Tool<'a> {
     pub name: &'a str,
@@ -27,13 +39,7 @@ impl<'a> Tool<'a> {
         &self,
         tokens: &mut TokenStorage<N>,
     ) -> Result<Json<'a>, Error> {
-        if self.name.is_empty()
-            || self.name.len() > 128
-            || !self.name.is_ascii()
-            || self.name.bytes().any(|b| b.is_ascii_control() || b == b' ')
-        {
-            return Err(Error::InvalidTool);
-        }
+        validate_name(self.name)?;
         let schema = Json::parse(self.input_schema.as_bytes(), tokens, Limits::default())?;
         if schema.kind() != JsonKind::Object {
             return Err(Error::InvalidTool);
