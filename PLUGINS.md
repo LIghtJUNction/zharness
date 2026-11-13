@@ -398,6 +398,13 @@ caller buffer. Percentiles include per-operation clock overhead, while `mean_ns`
 is a batch average. The benchmark does not measure loading latency, process RSS
 or model inference, and does not promise a fixed latency on every platform.
 
+The separate [Wasm adapter report](docs/WASM-PERFORMANCE-2026-11-13.md) compares
+the same guest through direct zplugin, named byte calls, checked text calls,
+Executor and Router. It measures load/drop separately and records allocator
+requests, not RSS. Every warmed batch asserts zero allocations. Its percentiles
+describe batch averages, unlike the native benchmark's instrumented individual
+calls, so the two reports must not be divided into a cross-backend speed ratio.
+
 ## References
 
 - [zplugin 0.3.0 public API](https://github.com/LIghtJUNction/zplugin/tree/v0.3.0)

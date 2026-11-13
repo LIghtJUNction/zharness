@@ -95,6 +95,11 @@ guest-memory limits do not cap process RSS, and fuel does not time module
 compilation. Use additional process isolation for stricter resource/threat models.
 See [the complete contracts and examples](PLUGINS.md).
 
+The [Wasm adapter measurements](docs/WASM-PERFORMANCE-2026-11-13.md) compare
+matched zplugin, Executor and Router calls with raw samples and allocation
+counts. They distinguish warmed calls from loading and do not claim process RSS
+limits or end-to-end agent latency.
+
 ## Native skills
 
 `SkillPaths::from_env(project)` combines project and global skills with any
