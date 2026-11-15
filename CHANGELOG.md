@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.5.0] - unreleased
+## [0.5.0] - 2026-11-15
 
 - Upgrade the exact model-call dependency to zcall 0.3.0 and transitive zconv 0.4.0; keep zplugin 0.3.0 and its feature policy unchanged.
 - Preserve raw reasoning and summary deltas as different lifecycle actions.
