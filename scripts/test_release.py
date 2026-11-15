@@ -121,6 +121,40 @@ checksum = "preserved-plugin"
             release.candidate("0.2.0", self.source)
         self.assertEqual(Path("README.md").read_text(), "uncommitted user work")
 
+    def test_committed_version_is_planned_without_changing_source_or_refs(self):
+        self.git("tag", "v0.1.0", self.source)
+        prepared = release.candidate("0.2.0", self.source)
+        self.git("push", "-q", "origin", "HEAD:main")
+        with patch.dict(os.environ, {"GITHUB_REPOSITORY": release.REPOSITORY,
+                                     "GITHUB_REF": "refs/heads/main"}), \
+                patch.object(release, "registry_preflight") as preflight, \
+                patch.object(release, "emit") as emit:
+            release.plan({"bump": "custom", "version": "0.2.0", "dry_run": False})
+        self.assertEqual(self.git("rev-parse", "HEAD"), prepared)
+        self.assertEqual(self.git("ls-remote", "origin", "refs/heads/main").split()[0], prepared)
+        self.assertFalse(release.tag_exists("v0.2.0"))
+        self.assertEqual(emit.call_args.kwargs["source"], prepared)
+        self.assertEqual(emit.call_args.kwargs["candidate"], prepared)
+        self.assertFalse(emit.call_args.kwargs["resume"])
+        preflight.assert_called_once_with("0.2.0", False)
+
+    def test_higher_or_equivalent_version_tag_blocks_new_release_planning(self):
+        for tag in ("v0.3.0", "v0.2.0+existing"):
+            with self.subTest(tag=tag):
+                self.git("tag", tag, self.source)
+                with patch.dict(os.environ, {"GITHUB_REPOSITORY": release.REPOSITORY,
+                                             "GITHUB_REF": "refs/heads/main"}), \
+                        patch.object(release, "registry_preflight") as preflight, \
+                        patch.object(release, "emit") as emit, \
+                        self.assertRaisesRegex(ValueError, "exceed existing version tags"):
+                    release.plan({"bump": "custom", "version": "0.2.0", "dry_run": False})
+                self.assertEqual(self.git("rev-parse", "HEAD"), self.source)
+                self.assertEqual(self.git("ls-remote", "origin", "refs/heads/main").split()[0], self.source)
+                self.assertFalse(release.tag_exists("v0.2.0"))
+                preflight.assert_not_called()
+                emit.assert_not_called()
+                self.git("tag", "-d", tag)
+
     def test_changelog_promotes_bracketed_pending_and_preserves_history(self):
         Path("CHANGELOG.md").write_text("# Changes\n\n## [Unreleased]\n\n- New task ABI.\n\n## [0.1.0]\n\n- Original.\n")
         self.git("add", "CHANGELOG.md")

@@ -1,7 +1,7 @@
 # Release contract
 
-The direct pinned dependencies are zcall 0.2.0 and zplugin 0.3.0; zcall pins
-zconv 0.3.0. Default/native runtime dependencies stay within Project Z. The
+The direct pinned dependencies are zcall 0.3.0 and zplugin 0.3.0; zcall pins
+zconv 0.4.0. Default/native runtime dependencies stay within Project Z. The
 explicit wasm feature adds eight Wasmi runtime packages. The dependency audit
 checks core, default, wasm-only and all-feature graphs separately, excluding
 compiler-only procedural macro/parser packages from runtime claims.
@@ -14,7 +14,7 @@ to true: it validates the final candidate without pushing a version/tag or
 publishing. For a committed request, change `.github/release-request.json` to:
 
 ```json
-{"bump":"custom","version":"0.4.0","dry_run":false}
+{"bump":"custom","version":"0.5.0","dry_run":false}
 ```
 
 This file is an explicit publication trigger, not a recurring desired version.
@@ -27,6 +27,12 @@ The plan validates crate ownership, versions, current tags and exact published
 dependency pins. It computes one reproducible version commit. Version changes
 update Cargo manifests, the existing lockfile, README and the pending changelog;
 dependency versions are not silently re-resolved during a release bump.
+
+A reviewed commit may already contain the requested custom version. A new
+release must have strictly higher SemVer precedence than every existing version
+tag and must be absent from the registry. A matching existing tag follows the
+separate provenance-checked recovery path. Planning a pre-versioned commit does
+not introduce another version bump or relax source, owner or validation gates.
 
 Linux, macOS and Windows run Rust stable and MSRV 1.99.1 against that exact
 candidate. Checks include fmt/Clippy, debug/release tests, doctests and strict

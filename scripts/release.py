@@ -275,8 +275,12 @@ def plan(settings):
         # Publication still requires current main here and again before ref updates.
         require(settings["dry_run"] is True or git("rev-parse", "origin/main") == source,
                 "main advanced since dispatch; run again from the current head")
-        require(version != root_version() or not git("tag", "--list", "v*"),
-                "unchanged version is only allowed for an unpublished first release or exact-tag resume")
+        # A reviewed source commit may already contain the intended version.
+        # Its registry entry must still be absent, and every existing version
+        # tag must precede it; an exact existing tag uses the resume path above.
+        previous_tags = git("tag", "--list", "v*").splitlines()
+        require(all(semver(version) > semver(previous[1:]) for previous in previous_tags),
+                "new release version must exceed existing version tags; use the exact tag to resume")
         commit = candidate(version, source)
     registry_preflight(version, resume)
     emit(version=version, tag=tag, source=source, candidate=commit,
