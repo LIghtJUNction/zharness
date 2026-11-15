@@ -3,12 +3,12 @@
 Caller-buffered primitives for developer-owned AI harnesses: context windows,
 model/tool turns, hooks, output transforms and multi-agent coordination. The core
 is `no_std`, forbids handwritten unsafe Rust and directly depends on
-`zcall = "=0.2.0"` and `zplugin = "=0.3.0"` with default features disabled.
+`zcall = "=0.3.0"` and `zplugin = "=0.3.0"` with default features disabled.
 zplugin's official macro generates the native interface and introduces
 compilation-only parser dependencies. The default/native runtime graph stays
 within Project Z crates; the explicit `wasm` feature adds zplugin's Wasmi sandbox.
 
-Version 0.4.0 integrates trusted native and untrusted Wasm plugins with named
+Version 0.5.0 consumes zconv 0.4.0 through zcall and retains trusted native and untrusted Wasm plugins with named
 operations, mixed-backend routing, explicit disabling/replacement and existing
 authorization hooks. It retains skills, typed lifecycle channels, provider-bound
 tool signatures and conversation/model/request/response primitives. The library
@@ -19,13 +19,19 @@ To use the published package:
 
 ```toml
 [dependencies]
-zharness = "=0.4.0"
+zharness = "=0.5.0"
 ```
 
 Default features enable filesystem skill discovery and native path loading.
 Set `default-features = false` to use the `no_std` core.
 Add `features = ["wasm"]` for sandboxed plugins. This feature needs an allocator
 but does not imply `std`; native plugin loading continues to require trusted code.
+
+Response lifecycle hooks distinguish raw reasoning from summaries and preserve
+provider-owned Anthropic blocks, citation deltas and usage metadata as separate
+actions. Those server tool blocks never enter the local execution queue. The
+re-exported `zharness::zcall` contract also exposes structured tool results,
+continuous usage configuration and the `api` resource codecs.
 
 ## Boundary
 

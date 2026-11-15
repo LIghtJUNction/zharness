@@ -238,7 +238,9 @@ pub mod model {
 
 pub mod response {
     use super::{Fault, LifecycleEvent, Payload};
-    use crate::zcall::v1::{BlockType, EventKey, ProviderSignature, StreamUsage, TurnOutcome};
+    use crate::zcall::v1::{
+        AnthropicUsageField, BlockType, EventKey, ProviderSignature, StreamUsage, TurnOutcome,
+    };
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     #[non_exhaustive]
     pub enum Action {
@@ -247,6 +249,7 @@ pub mod response {
         BlockStart,
         TextDelta,
         ReasoningDelta,
+        ReasoningSummaryDelta,
         ToolArgumentsDelta,
         RefusalDelta,
         Signature,
@@ -254,6 +257,9 @@ pub mod response {
         ToolReady,
         Images,
         Grounding,
+        ProviderBlock,
+        ProviderDelta,
+        ProviderUsage,
         Continuation,
         StopSequence,
         Usage,
@@ -273,6 +279,7 @@ pub mod response {
             Self::BlockStart,
             Self::TextDelta,
             Self::ReasoningDelta,
+            Self::ReasoningSummaryDelta,
             Self::ToolArgumentsDelta,
             Self::RefusalDelta,
             Self::Signature,
@@ -280,6 +287,9 @@ pub mod response {
             Self::ToolReady,
             Self::Images,
             Self::Grounding,
+            Self::ProviderBlock,
+            Self::ProviderDelta,
+            Self::ProviderUsage,
             Self::Continuation,
             Self::StopSequence,
             Self::Usage,
@@ -306,6 +316,7 @@ pub mod response {
         pub first_visible: bool,
         pub terminal: Option<TurnOutcome>,
         pub usage: Option<StreamUsage>,
+        pub provider_usage: Option<AnthropicUsageField>,
     }
     impl Event<'_> {
         pub const fn new(action: Action) -> Self {
@@ -320,6 +331,7 @@ pub mod response {
                 first_visible: false,
                 terminal: None,
                 usage: None,
+                provider_usage: None,
             }
         }
     }

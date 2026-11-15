@@ -58,6 +58,7 @@ impl ResponseStream {
                 event.action = match kind {
                     BlockType::Text => Action::TextDelta,
                     BlockType::Reasoning => Action::ReasoningDelta,
+                    BlockType::ReasoningSummary => Action::ReasoningSummaryDelta,
                     BlockType::Tool => Action::ToolArgumentsDelta,
                     BlockType::Refusal => Action::RefusalDelta,
                 };
@@ -100,6 +101,22 @@ impl ResponseStream {
             EventData::Grounding { choice, json } => {
                 event.action = Action::Grounding;
                 event.choice = Some(choice);
+                event.payload = Payload::bytes(json);
+            }
+            EventData::ProviderBlock { key, kind, json } => {
+                event.action = Action::ProviderBlock;
+                event.key = Some(key);
+                event.block = Some(kind);
+                event.payload = Payload::bytes(json);
+            }
+            EventData::ProviderDelta { key, json } => {
+                event.action = Action::ProviderDelta;
+                event.key = Some(key);
+                event.payload = Payload::bytes(json);
+            }
+            EventData::ProviderUsage { field, json } => {
+                event.action = Action::ProviderUsage;
+                event.provider_usage = Some(field);
                 event.payload = Payload::bytes(json);
             }
             EventData::Continuation { choice, token } => {

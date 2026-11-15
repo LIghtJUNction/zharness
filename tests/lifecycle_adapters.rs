@@ -399,6 +399,78 @@ fn new_stream_metadata_reaches_hooks_and_consumer_without_becoming_visible_text(
 }
 
 #[test]
+fn provider_metadata_and_reasoning_summaries_remain_distinct_lifecycle_actions() {
+    use zharness::lifecycle::Visibility;
+    use zharness::zcall::v1::AnthropicUsageField;
+    #[derive(Default)]
+    struct ProviderLog(Vec<response::Action>);
+    impl<'a> Observer<response::Event<'a>> for ProviderLog {
+        fn observe(&mut self, notice: Notice<response::Event<'a>>) {
+            if notice.phase == Phase::Finished(Outcome::Succeeded) {
+                let event = notice.proposal.event;
+                if event.action == response::Action::TurnStart {
+                    return;
+                }
+                assert!(!event.first_visible);
+                if event.action == response::Action::ProviderUsage {
+                    assert_eq!(
+                        event.provider_usage,
+                        Some(AnthropicUsageField::ServerToolUse)
+                    );
+                    assert_eq!(
+                        event.payload.as_bytes(),
+                        Some(b"{\"web_search_requests\":1}".as_slice())
+                    );
+                }
+                self.0.push(event.action);
+            }
+        }
+    }
+    let mut lifecycle =
+        Lifecycle::new(1, NoGate, ProviderLog::default()).with_visibility(Visibility::Content);
+    let mut stream = ResponseStream::new(IDS);
+    for event in [
+        EventData::Started {
+            response_id: None,
+            model: None,
+            created: None,
+        },
+        EventData::ProviderBlock {
+            key: EventKey::default(),
+            kind: BlockType::Tool,
+            json: b"{\"type\":\"server_tool_use\"}",
+        },
+        EventData::ProviderDelta {
+            key: EventKey::default(),
+            json: b"{\"type\":\"citations_delta\"}",
+        },
+        EventData::ProviderUsage {
+            field: AnthropicUsageField::ServerToolUse,
+            json: b"{\"web_search_requests\":1}",
+        },
+        EventData::Delta {
+            key: EventKey::default(),
+            kind: BlockType::ReasoningSummary,
+            text: Text::new("summary"),
+        },
+    ] {
+        stream
+            .accept(event, &mut lifecycle, |_| Ok(Control::Continue))
+            .unwrap();
+    }
+    assert!(!stream.has_visible_content());
+    assert_eq!(
+        lifecycle.observer().0,
+        [
+            response::Action::ProviderBlock,
+            response::Action::ProviderDelta,
+            response::Action::ProviderUsage,
+            response::Action::ReasoningSummaryDelta
+        ]
+    );
+}
+
+#[test]
 fn signature_origin_and_uncached_usage_survive_hooks_with_signature_redaction() {
     use zharness::lifecycle::Visibility;
     #[derive(Default)]

@@ -6,7 +6,7 @@ import subprocess
 import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
-PINS = {"zcall": "=0.2.0", "zplugin": "=0.3.0"}
+PINS = {"zcall": "=0.3.0", "zplugin": "=0.3.0"}
 NATIVE = {"zharness", "zcall", "zconv", "zplugin"}
 MACROS = {"zplugin-macros", "syn", "quote", "proc-macro2", "unicode-ident"}
 WASM = {"wasmi", "wasmi_core", "wasmi_ir", "wasmi_collections",
@@ -57,7 +57,7 @@ def validate_metadata(metadata, manifest, wasm):
     for dependency in root["dependencies"]:
         assert dependency["req"] == PINS[dependency["name"]]
         assert not dependency["uses_default_features"]
-    for name, expected in {"zcall": "0.2.0", "zconv": "0.3.0",
+    for name, expected in {"zcall": "0.3.0", "zconv": "0.4.0",
                            "zplugin": "0.3.0", "zplugin-macros": "0.3.0"}.items():
         assert packages[name]["version"] == expected, (name, packages[name]["version"])
     if wasm:

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.0] - unreleased
+
+- Upgrade the exact model-call dependency to zcall 0.3.0 and transitive zconv 0.4.0; keep zplugin 0.3.0 and its feature policy unchanged.
+- Preserve raw reasoning and summary deltas as different lifecycle actions.
+- Add source-owned provider block, citation-delta and usage-metadata lifecycle actions. Hooks retain the exact payload and usage field identity without scheduling server tools locally.
+- Re-export the updated zcall contract, including typed tool-result arrays, resource codecs, stream usage preferences and continuous usage emission.
+- Update dependency audit expectations for the new published closure.
+
 ## [0.4.0] - 2026-11-13
 
 - Upgrade the native plugin dependency to published zplugin 0.3.0; retain current
