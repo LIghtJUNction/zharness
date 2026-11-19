@@ -10,6 +10,7 @@ use zharness::{
     validation::{ArgumentLimits, Arguments},
     zcall::v1::TokenStorage,
 };
+#[path = "native/native.rs"]
 mod native;
 
 struct CountingAllocator;
