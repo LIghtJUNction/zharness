@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.5.1] - 2026-11-20
 
 - Pin zplugin and its generated-interface macros to 0.3.1, sharing native library loading through zsys 0.1.1.
 - Include zsys in the exact Project Z runtime audit and reject duplicate package names instead of hiding multiple plugin versions behind a set.
