@@ -23,7 +23,7 @@ To use the published package:
 
 ```toml
 [dependencies]
-zharness = "=0.5.0"
+zharness = "=0.5.1"
 ```
 
 Default features enable filesystem skill discovery and native path loading.

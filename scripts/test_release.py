@@ -115,6 +115,23 @@ checksum = "preserved-plugin"
         self.assertEqual(first, second)
         self.assertEqual(self.git("status", "--porcelain"), "")
 
+    def test_readme_install_syntax_and_exact_pins_are_preserved(self):
+        cases = [
+            ('zharness = "=0.1.0"\n', 'zharness = "=0.2.0"\n'),
+            ('zharness = "0.1.0"\n', 'zharness = "0.2.0"\n'),
+            ('zharness = { version = "=0.1.0", features = ["std"] }\n',
+             'zharness = { version = "=0.2.0", features = ["std"] }\n'),
+        ]
+        for before, after in cases:
+            with self.subTest(declaration=before.strip()):
+                self.git("checkout", "--detach", self.source)
+                Path("README.md").write_text(before)
+                self.git("add", "README.md")
+                self.git("commit", "-qm", "install declaration")
+                source = self.git("rev-parse", "HEAD")
+                release.candidate("0.2.0", source)
+                self.assertEqual(Path("README.md").read_text(), after)
+
     def test_rejects_dirty_checkout(self):
         Path("README.md").write_text("uncommitted user work")
         with self.assertRaisesRegex(ValueError, "clean checkout"):

@@ -156,8 +156,8 @@ def set_version(version, source):
             changelog.write_text(text, encoding="utf-8")
     readme = Path("README.md")
     if readme.exists():
-        text = re.sub(r'(?m)(^zharness\s*=\s*(?:\{\s*version\s*=\s*)")=?' + re.escape(old) + r'(")',
-                      lambda m: m[1] + version + m[2], readme.read_text(encoding="utf-8"))
+        text = re.sub(r'(?m)(^zharness\s*=\s*(?:\{\s*version\s*=\s*)?")(=?)' + re.escape(old) + r'(")',
+                      lambda m: m[1] + m[2] + version + m[3], readme.read_text(encoding="utf-8"))
         readme.write_text(text, encoding="utf-8")
 
 
