@@ -3,12 +3,16 @@
 Caller-buffered primitives for developer-owned AI harnesses: context windows,
 model/tool turns, hooks, output transforms and multi-agent coordination. The core
 is `no_std`, forbids handwritten unsafe Rust and directly depends on
-`zcall = "=0.3.0"` and `zplugin = "=0.3.0"` with default features disabled.
+`zcall = "=0.3.0"` and `zplugin = "=0.3.1"` with default features disabled.
 zplugin's official macro generates the native interface and introduces
-compilation-only parser dependencies. The default/native runtime graph stays
-within Project Z crates; the explicit `wasm` feature adds zplugin's Wasmi sandbox.
+compilation-only parser dependencies. Native library loading is shared through
+`zsys = "=0.1.1"`, a transitive dependency of zplugin. The default/native runtime
+graph stays within Project Z crates; the explicit `wasm` feature adds zplugin's
+Wasmi sandbox. [The dependency audit](scripts/audit.py) checks exact Z versions,
+registry sources and a single resolved package for each name.
 
-Version 0.5.0 consumes zconv 0.4.0 through zcall and retains trusted native and untrusted Wasm plugins with named
+The protocol layer consumes zconv 0.4.0 through zcall and retains trusted native
+and untrusted Wasm plugins with named
 operations, mixed-backend routing, explicit disabling/replacement and existing
 authorization hooks. It retains skills, typed lifecycle channels, provider-bound
 tool signatures and conversation/model/request/response primitives. The library

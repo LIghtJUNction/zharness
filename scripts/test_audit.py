@@ -3,7 +3,7 @@
 import copy
 import unittest
 
-from audit import PINS, runtime_names, validate_manifest
+from audit import PINS, REGISTRY, runtime_names, validate_manifest, validate_metadata
 
 
 class ManifestTests(unittest.TestCase):
@@ -64,6 +64,58 @@ class ClosureTests(unittest.TestCase):
         changed = copy.deepcopy(metadata)
         changed["resolve"]["nodes"][0]["deps"].append(dependency("parser"))
         self.assertEqual(runtime_names(changed), {"root", "normal", "parser"})
+
+
+class ExactClosureTests(unittest.TestCase):
+    def snapshot(self):
+        manifest = ManifestTests().manifest()
+        manifest["package"] = {"version": "0.5.0"}
+        versions = {"zharness": "0.5.0", "zcall": "0.3.0", "zconv": "0.4.0",
+                    "zplugin": "0.3.1", "zsys": "0.1.1", "zplugin-macros": "0.3.1",
+                    "syn": "2.0.0", "quote": "1.0.0", "proc-macro2": "1.0.0",
+                    "unicode-ident": "1.0.0"}
+        graph = {"zharness": ["zcall", "zplugin"], "zcall": ["zconv"],
+                 "zplugin": ["zsys", "zplugin-macros"],
+                 "zplugin-macros": ["syn", "quote", "proc-macro2", "unicode-ident"]}
+        packages = [{"id": name, "name": name, "version": version,
+                     "source": None if name == "zharness" else REGISTRY,
+                     "targets": [{"kind": ["proc-macro" if name == "zplugin-macros" else "lib"]}]}
+                    for name, version in versions.items()]
+        packages[0]["dependencies"] = [
+            {"name": name, "req": pin, "uses_default_features": False}
+            for name, pin in PINS.items()]
+        nodes = [{"id": name, "deps": [{"pkg": dep, "dep_kinds": [{"kind": None}]}
+                                     for dep in graph.get(name, [])]}
+                 for name in versions]
+        return manifest, {"packages": packages, "resolve": {"root": "zharness", "nodes": nodes}}
+
+    def test_shared_system_library_is_in_the_exact_runtime_closure(self):
+        manifest, metadata = self.snapshot()
+        self.assertEqual(validate_metadata(metadata, manifest, False),
+                         ["zcall", "zconv", "zharness", "zplugin", "zsys"])
+
+    def test_old_plugin_macro_or_system_versions_are_rejected(self):
+        for name, version in [("zplugin", "0.3.0"), ("zplugin-macros", "0.3.0"),
+                              ("zsys", "0.1.0")]:
+            manifest, metadata = self.snapshot()
+            next(p for p in metadata["packages"] if p["name"] == name)["version"] = version
+            with self.subTest(name=name), self.assertRaises(AssertionError):
+                validate_metadata(metadata, manifest, False)
+
+    def test_duplicate_plugin_versions_are_rejected(self):
+        manifest, metadata = self.snapshot()
+        duplicate = copy.deepcopy(next(p for p in metadata["packages"] if p["name"] == "zplugin"))
+        duplicate.update(id="old-plugin", version="0.3.0")
+        metadata["packages"].insert(0, duplicate)
+        metadata["resolve"]["nodes"].append({"id": "old-plugin", "deps": []})
+        with self.assertRaisesRegex(AssertionError, "duplicate"):
+            validate_metadata(metadata, manifest, False)
+
+    def test_system_source_override_is_rejected(self):
+        manifest, metadata = self.snapshot()
+        next(p for p in metadata["packages"] if p["name"] == "zsys")["source"] = None
+        with self.assertRaises(AssertionError):
+            validate_metadata(metadata, manifest, False)
 
 
 if __name__ == "__main__":

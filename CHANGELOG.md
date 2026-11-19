@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+- Pin zplugin and its generated-interface macros to 0.3.1, sharing native library loading through zsys 0.1.1.
+- Include zsys in the exact Project Z runtime audit and reject duplicate package names instead of hiding multiple plugin versions behind a set.
+- Retain the existing no_std core, std/wasm feature boundaries and native Extension v1 contract.
+
 ## [0.5.0] - 2026-11-15
 
 - Upgrade the exact model-call dependency to zcall 0.3.0 and transitive zconv 0.4.0; keep zplugin 0.3.0 and its feature policy unchanged.

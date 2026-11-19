@@ -6,8 +6,8 @@ import subprocess
 import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
-PINS = {"zcall": "=0.3.0", "zplugin": "=0.3.0"}
-NATIVE = {"zharness", "zcall", "zconv", "zplugin"}
+PINS = {"zcall": "=0.3.0", "zplugin": "=0.3.1"}
+NATIVE = {"zharness", "zcall", "zconv", "zplugin", "zsys"}
 MACROS = {"zplugin-macros", "syn", "quote", "proc-macro2", "unicode-ident"}
 WASM = {"wasmi", "wasmi_core", "wasmi_ir", "wasmi_collections",
         "wasmparser", "spin", "libm", "bitflags"}
@@ -51,6 +51,7 @@ def validate_metadata(metadata, manifest, wasm):
     assert {p["name"] for p in metadata["packages"]} == expected_runtime | MACROS
     assert runtime_names(metadata) == expected_runtime
     packages = {p["name"]: p for p in metadata["packages"]}
+    assert len(packages) == len(metadata["packages"]), "duplicate Cargo package names require review"
     root = packages["zharness"]
     assert len(root["dependencies"]) == len(PINS)
     assert root["version"] == manifest["package"]["version"]
@@ -58,7 +59,7 @@ def validate_metadata(metadata, manifest, wasm):
         assert dependency["req"] == PINS[dependency["name"]]
         assert not dependency["uses_default_features"]
     for name, expected in {"zcall": "0.3.0", "zconv": "0.4.0",
-                           "zplugin": "0.3.0", "zplugin-macros": "0.3.0"}.items():
+                           "zplugin": "0.3.1", "zplugin-macros": "0.3.1", "zsys": "0.1.1"}.items():
         assert packages[name]["version"] == expected, (name, packages[name]["version"])
     if wasm:
         assert packages["wasmi"]["version"] == "2.0.0"

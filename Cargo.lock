@@ -126,21 +126,28 @@ dependencies = [
 
 [[package]]
 name = "zplugin"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea2485a9c61ce94d77f52baf55dcad088a151a7c742125f7a7c1cfee6bd07b4e"
+checksum = "094cd57c6b7759cbbf7834e96aed75c9d025558a7d2cc4b742e78b33f8e7a448"
 dependencies = [
  "wasmi",
  "zplugin-macros",
+ "zsys",
 ]
 
 [[package]]
 name = "zplugin-macros"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87b3be200d7786220b9993f3c78fb40d2a255e4fb46b6c8451ddd01fc285725b"
+checksum = "f39a8e67a3405ad54b2780d74360dabdbbcaa6f33fb44474e13433c0b34ca395"
 dependencies = [
  "proc-macro2",
  "quote",
  "syn",
 ]
+
+[[package]]
+name = "zsys"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "929d282f08df7fbe2456414924e126a29dfde04e93eb2515721b596404610548"

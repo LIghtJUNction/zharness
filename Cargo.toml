@@ -13,7 +13,7 @@ include = ["src/**", "tests/**", "examples/**", "benches/**", "scripts/*.py", "d
 
 [dependencies]
 zcall = { version = "=0.3.0", default-features = false }
-zplugin = { version = "=0.3.0", default-features = false, features = ["macros"] }
+zplugin = { version = "=0.3.1", default-features = false, features = ["macros"] }
 
 [features]
 default = ["std"]
