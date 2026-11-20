@@ -2,6 +2,8 @@
 
 import json
 import io
+import gzip
+import hashlib
 import os
 from pathlib import Path
 import subprocess
@@ -279,7 +281,8 @@ checksum = "preserved-plugin"
                 self.assertEqual(self.git("ls-remote", "origin", "refs/heads/main").split()[0], self.source)
                 self.assertFalse(release.tag_exists("v0.2.0"))
 
-    def test_package_hashes_require_exact_clean_commit_and_registry_sources(self):
+    @patch.object(release, "package_directory", return_value=Path("target/package"))
+    def test_package_hashes_require_exact_clean_commit_and_registry_sources(self, _package_directory):
         commit = release.candidate("0.2.0", self.source)
         path = Path("target/package/zharness-0.2.0.crate")
         path.parent.mkdir(parents=True)
@@ -302,6 +305,155 @@ checksum = "preserved-plugin"
             archive(**arguments)
             with self.subTest(arguments=arguments), self.assertRaises(ValueError):
                 release.package_hashes("0.2.0")
+
+
+
+class PackageRecoveryTests(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        previous = Path.cwd()
+        os.chdir(self.root)
+        self.addCleanup(os.chdir, previous)
+        self.version = "0.2.0"
+        self.commit = "a" * 40
+        self.head = self.commit
+        self.dirty = ""
+        self.target = self.root / "custom-build-output"
+        self.archive = self.target / "package" / f"zharness-{self.version}.crate"
+        self.blob = self.archive_bytes()
+        self.rebuilt_blob = self.blob
+        self.digest = hashlib.sha256(self.blob).hexdigest()
+        Path("CHANGELOG.md").write_text("# Changes\n\n## [0.2.0]\n\nVerified release.\n")
+        environment = patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": ""})
+        environment.start()
+        self.addCleanup(environment.stop)
+        for attribute, replacement in [
+            ("run", patch.object(release, "run", side_effect=self.command)),
+            ("git", patch.object(release, "git", side_effect=self.git_command)),
+            ("provenance", patch.object(release, "tag_provenance", return_value=self.commit)),
+            ("api", patch.object(release, "api", return_value={
+                "version": {"checksum": self.digest, "yanked": False}})),
+        ]:
+            setattr(self, attribute, replacement.start())
+            self.addCleanup(replacement.stop)
+
+    def archive_bytes(self, readme="verified package"):
+        manifest = ('[package]\nname = "zharness"\nversion = "0.2.0"\n'
+                    '[dependencies]\nzcall = "=0.4.0"\n')
+        files = {
+            "Cargo.toml": manifest,
+            ".cargo_vcs_info.json": json.dumps({"git": {"sha1": self.commit, "dirty": False}}),
+            "README.md": readme,
+        }
+        buffer = io.BytesIO()
+        with tarfile.open(fileobj=buffer, mode="w") as archive:
+            for name, text in files.items():
+                data = text.encode()
+                info = tarfile.TarInfo(f"zharness-{self.version}/" + name)
+                info.size = len(data)
+                archive.addfile(info, io.BytesIO(data))
+        return gzip.compress(buffer.getvalue(), mtime=0)
+
+    def git_command(self, *args):
+        if args == ("rev-parse", "HEAD"):
+            return self.head
+        if args == ("status", "--porcelain"):
+            return self.dirty
+        self.fail(f"unexpected git command: {args}")
+
+    def command(self, *args, **kwargs):
+        if args == ("cargo", "metadata", "--locked", "--format-version", "1", "--no-deps"):
+            return json.dumps({"target_directory": str(self.target)})
+        if args == ("cargo", "package", "--locked", "-p", "zharness", "--all-features"):
+            self.archive.parent.mkdir(parents=True, exist_ok=True)
+            self.archive.write_bytes(self.rebuilt_blob)
+            return None
+        if args == ("cargo", "publish", "--locked", "--dry-run", "-p", "zharness", "--all-features"):
+            return None
+        if args[:3] == ("gh", "release", "view"):
+            if kwargs.get("check") is False:
+                return subprocess.CompletedProcess(args, 0, json.dumps({
+                    "tagName": "v0.2.0", "isDraft": False,
+                    "url": "https://github.com/LIghtJUNction/zharness/releases/tag/v0.2.0"}))
+            return "https://github.com/LIghtJUNction/zharness/releases/tag/v0.2.0"
+        self.fail(f"unexpected external command: {args}")
+
+    def evidence(self, present=True):
+        self.archive.parent.mkdir(parents=True, exist_ok=True)
+        if present:
+            self.archive.write_bytes(self.blob)
+        elif self.archive.exists():
+            self.archive.unlink()
+        data = {"zharness": {"path": str(self.archive), "sha256": self.digest}}
+        Path("target").mkdir(exist_ok=True)
+        Path("target/release-packages.json").write_text(json.dumps(data))
+        return data
+
+    def test_archive_is_located_through_cargo_metadata(self):
+        expected = self.evidence()
+        self.assertEqual(release.package_hashes(self.version), expected)
+        self.assertFalse(Path("target/package").exists())
+        self.run.assert_called_once_with(
+            "cargo", "metadata", "--locked", "--format-version", "1", "--no-deps")
+
+    def test_packages_preserve_evidence_with_a_custom_target(self):
+        self.assertFalse(Path("target").exists())
+        release.packages(self.version)
+        expected = {"zharness": {"path": str(self.archive), "sha256": self.digest}}
+        self.assertEqual(json.loads(Path("target/release-packages.json").read_text()), expected)
+        self.assertFalse(Path("target/package").exists())
+
+    def test_finish_rebuilds_only_when_the_verified_archive_is_missing(self):
+        for present in (True, False):
+            with self.subTest(present=present):
+                self.evidence(present)
+                self.run.reset_mock()
+                self.api.reset_mock()
+                release.finish(self.version, "https://example.invalid/validation")
+                packages = [call for call in self.run.call_args_list
+                            if call.args[:2] == ("cargo", "package")]
+                self.assertEqual(len(packages), 0 if present else 1)
+                self.assertEqual(self.archive.read_bytes(), self.blob)
+                self.api.assert_called_once_with("crates/zharness/0.2.0")
+                self.assertEqual(json.loads(Path("target/release-state.json").read_text())["stage"], "complete")
+
+    def test_changed_rebuild_is_rejected_before_registry_or_github(self):
+        self.evidence(False)
+        self.rebuilt_blob = self.archive_bytes("different package bytes")
+        with self.assertRaisesRegex(ValueError, "validated package bytes changed"):
+            release.finish(self.version, "https://example.invalid/validation")
+        self.api.assert_not_called()
+        self.assertFalse(any(call.args[0] == "gh" for call in self.run.call_args_list))
+
+    def test_missing_prior_evidence_stops_before_rebuilding(self):
+        with self.assertRaises(FileNotFoundError):
+            release.finish(self.version, "https://example.invalid/validation")
+        self.run.assert_not_called()
+        self.api.assert_not_called()
+
+    def test_source_tag_or_dirty_changes_stop_before_rebuilding(self):
+        for head, tag, dirty in [
+            ("b" * 40, self.commit, ""),
+            (self.commit, "b" * 40, ""),
+            (self.commit, self.commit, " M Cargo.toml"),
+        ]:
+            with self.subTest(head=head, tag=tag, dirty=dirty):
+                self.head, self.dirty = head, dirty
+                self.provenance.return_value = tag
+                with self.assertRaisesRegex(ValueError, "exact clean verified tag"):
+                    release.finish(self.version, "https://example.invalid/validation")
+        self.run.assert_not_called()
+        self.api.assert_not_called()
+
+    def test_registry_checksum_is_still_required_after_rebuilding(self):
+        self.evidence(False)
+        self.api.return_value = {"version": {"checksum": "f" * 64, "yanked": False}}
+        with self.assertRaisesRegex(ValueError, "registry checksum differs"):
+            release.finish(self.version, "https://example.invalid/validation")
+        self.assertTrue(self.archive.exists())
+        self.assertFalse(any(call.args[0] == "gh" for call in self.run.call_args_list))
 
 
 class RegistryTests(unittest.TestCase):

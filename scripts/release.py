@@ -287,10 +287,18 @@ def plan(settings):
          resume=resume, dry_run=settings["dry_run"])
 
 
-def package_hashes(version):
+def package_directory():
+    metadata = json.loads(run("cargo", "metadata", "--locked", "--format-version", "1", "--no-deps"))
+    return Path(metadata["target_directory"]) / "package"
+
+
+def package_hashes(version, *, recover_missing=False):
+    directory = package_directory()
+    if recover_missing and any(not (directory / f"{name}-{version}.crate").is_file() for name in PACKAGES):
+        run("cargo", "package", "--locked", "-p", PACKAGES[0], "--all-features", capture=False)
     paths = {}
     for name in PACKAGES:
-        path = Path("target/package") / f"{name}-{version}.crate"
+        path = directory / f"{name}-{version}.crate"
         require(path.is_file(), f"missing validated archive: {path}")
         with tarfile.open(path, "r:gz") as archive:
             prefix = f"{name}-{version}/"
@@ -312,6 +320,7 @@ def package_hashes(version):
 def packages(version):
     run("cargo", "package", "--locked", "-p", PACKAGES[0], "--all-features", capture=False)
     data = package_hashes(version)
+    Path("target").mkdir(exist_ok=True)
     Path("target/release-packages.json").write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     run("cargo", "publish", "--locked", "--dry-run", "-p", PACKAGES[0], "--all-features", capture=False)
     require(data == package_hashes(version), "dry-run changed validated package bytes")
@@ -414,11 +423,15 @@ def changelog_notes(version):
 
 
 def finish(version, validation_url):
-    data = package_hashes(version)
-    for name in PACKAGES:
-        require(registry_matches(name, version, data[name]["sha256"]), "cannot create a release before registry verification")
     tag = "v" + version
     commit = tag_provenance(tag)
+    require(commit == git("rev-parse", "HEAD") and not git("status", "--porcelain"),
+            "finish requires the exact clean verified tag commit")
+    validated = json.loads(Path("target/release-packages.json").read_text())
+    data = package_hashes(version, recover_missing=True)
+    require(data == validated, "validated package bytes changed")
+    for name in PACKAGES:
+        require(registry_matches(name, version, data[name]["sha256"]), "cannot create a release before registry verification")
     notes = Path("target/release-notes.md")
     rows = "\n".join(f"| [{name}](https://crates.io/crates/{name}/{version}) | `{info['sha256']}` |" for name, info in data.items())
     notes.write_text(
