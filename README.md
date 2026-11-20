@@ -3,7 +3,7 @@
 Caller-buffered primitives for developer-owned AI harnesses: context windows,
 model/tool turns, hooks, output transforms and multi-agent coordination. The core
 is `no_std`, forbids handwritten unsafe Rust and directly depends on
-`zcall = "=0.3.0"` and `zplugin = "=0.3.1"` with default features disabled.
+`zcall = "=0.4.0"` and `zplugin = "=0.3.1"` with default features disabled.
 zplugin's official macro generates the native interface and introduces
 compilation-only parser dependencies. Native library loading is shared through
 `zsys = "=0.1.1"`, a transitive dependency of zplugin. The default/native runtime

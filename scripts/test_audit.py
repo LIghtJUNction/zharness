@@ -70,7 +70,7 @@ class ExactClosureTests(unittest.TestCase):
     def snapshot(self):
         manifest = ManifestTests().manifest()
         manifest["package"] = {"version": "0.5.0"}
-        versions = {"zharness": "0.5.0", "zcall": "0.3.0", "zconv": "0.4.0",
+        versions = {"zharness": "0.5.0", "zcall": "0.4.0", "zconv": "0.4.0",
                     "zplugin": "0.3.1", "zsys": "0.1.1", "zplugin-macros": "0.3.1",
                     "syn": "2.0.0", "quote": "1.0.0", "proc-macro2": "1.0.0",
                     "unicode-ident": "1.0.0"}
