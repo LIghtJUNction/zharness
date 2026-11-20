@@ -69,12 +69,12 @@ class ClosureTests(unittest.TestCase):
 class ExactClosureTests(unittest.TestCase):
     def snapshot(self):
         manifest = ManifestTests().manifest()
-        manifest["package"] = {"version": "0.5.0"}
-        versions = {"zharness": "0.5.0", "zcall": "0.4.0", "zconv": "0.4.0",
+        manifest["package"] = {"version": "0.6.0"}
+        versions = {"zharness": "0.6.0", "zguard": "0.1.0", "zcall": "0.4.0", "zconv": "0.4.0",
                     "zplugin": "0.3.1", "zsys": "0.1.1", "zplugin-macros": "0.3.1",
                     "syn": "2.0.0", "quote": "1.0.0", "proc-macro2": "1.0.0",
                     "unicode-ident": "1.0.0"}
-        graph = {"zharness": ["zcall", "zplugin"], "zcall": ["zconv"],
+        graph = {"zharness": ["zcall", "zplugin", "zguard"], "zcall": ["zconv"],
                  "zplugin": ["zsys", "zplugin-macros"],
                  "zplugin-macros": ["syn", "quote", "proc-macro2", "unicode-ident"]}
         packages = [{"id": name, "name": name, "version": version,
@@ -92,7 +92,7 @@ class ExactClosureTests(unittest.TestCase):
     def test_shared_system_library_is_in_the_exact_runtime_closure(self):
         manifest, metadata = self.snapshot()
         self.assertEqual(validate_metadata(metadata, manifest, False),
-                         ["zcall", "zconv", "zharness", "zplugin", "zsys"])
+                         ["zcall", "zconv", "zguard", "zharness", "zplugin", "zsys"])
 
     def test_old_plugin_macro_or_system_versions_are_rejected(self):
         for name, version in [("zplugin", "0.3.0"), ("zplugin-macros", "0.3.0"),

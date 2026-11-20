@@ -1,5 +1,15 @@
 # Security and ownership
 
+The native `guard` module enforces zguard policy when the host selects guarded
+execution. `Prepared::execute_guarded` and `Command::execute_guarded` check the
+exact executed request, consume any host-issued approval, reserve the session
+quota and record a decision before calling the adapter. Policy denial, pending
+approval and audit failure leave executor side effects and output untouched.
+`Authorization` and guarded wrappers are single-attempt values, including invalid
+commands. Preserve the Guard between calls and use current monotonic host time.
+See [GUARDRAILS.md](GUARDRAILS.md) for the trust boundary and verification matrix.
+
+
 Model output, tool arguments, metadata, summaries, task payloads and agent messages
 are untrusted. Registered names, valid JSON, pinned context and capability bits
 are not authorization decisions. The application validates schema/business rules

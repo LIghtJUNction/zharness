@@ -128,7 +128,11 @@ pub enum OutputStream {
 #[non_exhaustive]
 pub enum CommandError {
     InvalidCommand,
+    /// A single-attempt guarded executor was already consumed.
+    InvalidState,
     Denied,
+    /// Rejected by the native guard before the underlying adapter runs.
+    Guard(zguard::Verdict),
     Spawn,
     Io,
     TimedOut,

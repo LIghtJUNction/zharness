@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.6.0] - 2026-11-20
+
+- Add the direct, default-feature-free zguard 0.1.0 dependency and native guarded tool and command execution methods.
+- Bind host-issued approvals to the exact executed request, policy and session; retain argv boundaries and call IDs.
+- Enforce default-deny rules, host capability checks, per-call input limits, session call quotas and audit-before-execution checks.
+- Add single-attempt Executor and CommandExecutor adapters, structured guard errors, an executable example and adversarial integration coverage.
+- Upgrade zcall to 0.4.0 while retaining zconv 0.4.0 and zplugin 0.3.1.
+
+
 ## [0.5.1] - 2026-11-20
 
 - Pin zplugin and its generated-interface macros to 0.3.1, sharing native library loading through zsys 0.1.1.

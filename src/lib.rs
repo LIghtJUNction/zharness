@@ -9,6 +9,7 @@ pub mod command;
 pub mod context;
 pub mod conversation;
 pub mod execution;
+pub mod guard;
 pub mod hooks;
 #[doc = include_str!("../LIFECYCLE.md")]
 pub mod lifecycle;
@@ -30,6 +31,7 @@ pub use output::ToolResultTransform;
 pub use tools::{Executor, Tool, ToolOutput, ToolSet};
 pub use turn::ToolLoop;
 pub use zcall;
+pub use zguard;
 pub use zplugin;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -57,6 +59,8 @@ pub enum Error {
     },
     InvalidOutput,
     Denied,
+    /// Rejected by the native guard before the underlying adapter runs.
+    Guard(zguard::Verdict),
     ExecutionFailed,
     InvalidState,
     InvalidBudget,

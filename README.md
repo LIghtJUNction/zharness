@@ -3,7 +3,7 @@
 Caller-buffered primitives for developer-owned AI harnesses: context windows,
 model/tool turns, hooks, output transforms and multi-agent coordination. The core
 is `no_std`, forbids handwritten unsafe Rust and directly depends on
-`zcall = "=0.4.0"` and `zplugin = "=0.3.1"` with default features disabled.
+`zcall = "=0.4.0"`, `zplugin = "=0.3.1"` and `zguard = "=0.1.0"` with default features disabled.
 zplugin's official macro generates the native interface and introduces
 compilation-only parser dependencies. Native library loading is shared through
 `zsys = "=0.1.1"`, a transitive dependency of zplugin. The default/native runtime
@@ -23,7 +23,7 @@ To use the published package:
 
 ```toml
 [dependencies]
-zharness = "=0.5.1"
+zharness = "=0.6.0"
 ```
 
 Default features enable filesystem skill discovery and native path loading.
@@ -55,12 +55,31 @@ integration directory or cross-repository build dependency.
 | `conversation`, `settings` | New gated message acceptance and committed model/reasoning/configuration changes |
 | `request`, `response` | New actual-send boundary and replay-aware real zcall event consumption/final reply acceptance |
 | `execution`, `command` | Hooked user executors, preserved IDs/status and bounded output checks; no OS runtime |
+| `guard` | Native zguard execution policy, single-use approvals, quotas and audit-before-effect boundaries |
 | `output` | Caller-buffered text reduction and validated JSON minification |
 | `cluster` | Capability matching, task dependencies, leases, handoff, joins and bounded mailboxes |
 | `skills` | Borrowed SKILL.md metadata, caller-buffered summaries, ordered directories and on-demand loading |
 | `plugin` | Trusted native loading, explicit mixed-plugin routes, checked outputs and an Executor bridge |
 | `plugin::wasm` | Optional untrusted Wasm loading, named operation allowlists, execution limits and safe replacement |
 | `tools`, `validation`, `bridge` | Tool definitions, argument policy and public zcall result APIs |
+
+## Native security guardrails
+
+Use `Prepared::execute_guarded` and `Command::execute_guarded` to apply zguard at
+the actual execution boundary. Policies deny unmatched calls, separate tool and
+command permissions, require host-issued approvals where configured, and check
+call/input limits. A failed audit write blocks execution. Models cannot grant
+themselves permission through argument fields.
+
+`Authorization` and the executor adapters are single-attempt values. Reuse the
+session Guard to preserve quotas, and construct a new Authorization with current
+host time for each call. Existing low-level execution APIs retain their explicit
+host-authorization contract. See [GUARDRAILS.md](GUARDRAILS.md) for request binding,
+plugin routing, privacy and the complete compiled example.
+
+```sh
+cargo run --locked --example guarded_execution
+```
 
 ## Native extensions
 

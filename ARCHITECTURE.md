@@ -5,22 +5,18 @@ zcall owns model protocols, IR, streaming aggregation and lifecycle. All zcall
 integration uses public v1 APIs. No provider-specific fields or MCP source are
 parsed by the harness components.
 
-```text
-application: UI, transport, permissions, model capabilities, clocks and storage
-  |
-  +-- Conversation / ModelSettings: gated local acceptance and configuration
-  |        |
-  +-- Context -> zcall Request -> explicit encode/send operation -> Sender
-  |                                      |
-  +-- ResponseStream <--- zcall Session events ---> ToolLoop
-  |       |                                          |
-  |       +-- final assistant acceptance              +-- execution tickets
-  |                                                       |
-  +-- old native Hooks <--- Executor / Command / output transforms
-  |
-  +-- TaskBoard / Mailbox: local coordination for application-owned agent runs
-  |
-  +-- typed Lifecycle<G, O>: gated/observed application operations and receipts
+The guarded tool path preserves application-owned I/O and result retention:
+
+```mermaid
+flowchart TD
+    C["Conversation and context"] --> R["Request and host sender"]
+    R --> S["zcall session"]
+    S --> T["ToolLoop tickets"]
+    S --> F["Final response acceptance"]
+    T --> G["Hooks and zguard authorization"]
+    G --> E["Host executor"]
+    E --> O["Retained tool result"]
+    O --> C
 ```
 
 Context retains borrowed message groups, caller token costs and explicit summaries.
@@ -61,15 +57,24 @@ none of those tasks. Native wrappers and explicitly application-wrapped boundari
 are enumerated separately in LIFECYCLE.md. Error propagation never implies rollback
 of external effects or permission for a blind retry. Panics are not caught.
 
-The runtime dependency graph is zharness -> zcall 0.1.2 -> zconv 0.2.2 plus
-zharness -> zplugin 0.1.0. zplugin-macros and its parsing dependencies run during
-compilation. There is no MCP repository dependency.
+The direct runtime dependencies are zcall 0.4.0, zplugin 0.3.1 and zguard 0.1.0.
+zcall uses zconv 0.4.0; zplugin shares native loading through zsys 0.1.1.
+zguard has no Cargo dependencies. zplugin-macros and its parser dependencies run
+during compilation. The optional Wasm feature adds its separately audited engine;
+there is no MCP repository dependency.
+
+The guard owns per-session authorization state. Prepared and Command guarded
+methods retain exact request identity and feed it to zguard before invoking user
+code. Default denial, one-use host approvals, limits and metadata audit are part
+of that boundary. Existing low-level adapter methods keep their explicit host
+permission contract. See GUARDRAILS.md for the complete integration path.
 
 Native extensions use zplugin's real loader and generated v1 interface. The
 interface passes an operation name, input bytes and caller output storage, with
 no prescribed payload format. ExtensionProxy checks output sizes and optionally
 UTF-8; its Executor implementation passes validated tool arguments unchanged.
-Prepared's existing execution hooks surround the actual native call. The proxy
+Prepared's guarded execution methods check policy and audit before the actual
+native call; existing hooks retain their independent callbacks. The proxy
 borrows its library, so object destruction precedes unloading. Trust decisions,
 operation meaning, tool registration, scheduling and reload policy are explicit
 host responsibilities. The core contains no handwritten FFI or unsafe block.

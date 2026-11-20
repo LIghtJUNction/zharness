@@ -117,10 +117,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fb4c2c557b09be10a449b44d4034059837ab1980e8f89b830aedefcc9d0bbc15"
 
 [[package]]
+name = "zguard"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "641d20929078aba7e9eb6ae9c33ae89d9b23d3a0f12f0eebb8fd05dacc93eb40"
+
+[[package]]
 name = "zharness"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "zcall",
+ "zguard",
  "zplugin",
 ]
 
