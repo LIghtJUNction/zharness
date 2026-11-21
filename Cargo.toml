@@ -12,9 +12,9 @@ categories = ["api-bindings", "development-tools"]
 include = ["src/**", "tests/**", "examples/**", "benches/**", "scripts/*.py", "docs/**", "*.md", "LICENSE-*", "Cargo.toml", "Cargo.lock"]
 
 [dependencies]
-zguard = { version = "=0.1.0", default-features = false, git = "https://github.com/LIghtJUNction/zguard.git"}
-zcall = { version = "=0.4.0", default-features = false, git = "https://github.com/LIghtJUNction/zcall.git"}
-zplugin = { version = "=0.3.1", default-features = false, features = ["macros"], git = "https://github.com/LIghtJUNction/zplugin.git"}
+zguard = { default-features = false, git = "https://github.com/LIghtJUNction/zguard.git"}
+zcall = { default-features = false, git = "https://github.com/LIghtJUNction/zcall.git"}
+zplugin = { default-features = false, features = ["macros"], git = "https://github.com/LIghtJUNction/zplugin.git"}
 
 [features]
 default = ["std"]
