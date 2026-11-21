@@ -18,6 +18,8 @@ import sys
 import tarfile
 import time
 import tomllib
+
+import registry_stage
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -37,9 +39,9 @@ def require(condition, message):
         raise ValueError(message)
 
 
-def run(*args, capture=True, check=True, env=None):
+def run(*args, capture=True, check=True, env=None, cwd=None):
     result = subprocess.run(args, text=True, encoding="utf-8", check=False,
-                            stdout=subprocess.PIPE if capture else None, env=env)
+                            stdout=subprocess.PIPE if capture else None, env=env, cwd=cwd)
     require(not check or result.returncode == 0,
             f"command failed ({result.returncode}): {' '.join(map(str, args))}")
     return result.stdout.strip() if capture and check else result
@@ -209,19 +211,29 @@ def registry_preflight(version, resume=False):
         existing = next((v for v in data["versions"] if v["num"] == version), None)
         require(existing is None or resume, f"{name} {version} already exists without a resumable tag")
         require(existing is None or not existing.get("yanked"), f"{name} {version} is yanked")
-    # Exact registry pins are part of the package contract, not implicit local
-    # sibling checkouts. Keep this preflight independent of Cargo compilation.
-    manifest = tomllib.loads(Path("Cargo.toml").read_text(encoding="utf-8"))
+    # Resolve only the committed Git tuples. Registry projection is for the
+    # external package; the developer manifest/lock and refs are never changed.
+    root = Path.cwd().resolve()
+    _, manifests, lock = registry_stage._committed(root)
+    records = []
+    for package in registry_stage.locked_git_packages(lock):
+        name, pinned = package["name"], package["version"]
+        records.append(registry_stage.registry_record(
+            package, api(f"crates/{name}"), api(f"crates/{name}/{pinned}"),
+            index_version(name, pinned)))
+    projected = registry_stage.project(manifests, lock, records)
+    manifest = tomllib.loads(projected.get("Cargo.toml", manifests["Cargo.toml"]))
     for name, dependency in manifest.get("dependencies", {}).items():
         require(isinstance(dependency, dict)
                 and not {"path", "git"}.intersection(dependency)
                 and dependency.get("version", "").startswith("="),
-                f"{name}: dependency must be an exact registry version")
+                f"{name}: dependency must project to an exact registry version")
         pinned = dependency["version"][1:]
         semver(pinned)
-        published = api(f"crates/{name}/{pinned}")
-        require(published is not None and not published["version"].get("yanked"),
-                f"{name} {pinned} is missing or yanked")
+        if not any(r["name"] == dependency.get("package", name) and r["version"] == pinned for r in records):
+            published = api(f"crates/{dependency.get('package', name)}/{pinned}")
+            require(published is not None and not published["version"].get("yanked"),
+                    f"{name} {pinned} is missing or yanked")
 
 
 def tag_exists(tag):
@@ -287,42 +299,96 @@ def plan(settings):
          resume=resume, dry_run=settings["dry_run"])
 
 
+def index_version(name, version):
+    # crates.io's sparse path rules also cover short crate names.
+    prefix = {1: "1", 2: "2", 3: "3/" + name[:1]}.get(len(name), name[:2] + "/" + name[2:4])
+    request = Request("https://index.crates.io/" + prefix + "/" + name,
+                      headers={"User-Agent": USER_AGENT, "Cache-Control": "no-cache"})
+    try:
+        with urlopen(request, timeout=30) as response:
+            rows = [json.loads(line) for line in response if line.strip()]
+    except HTTPError as error:
+        if error.code == 404:
+            return None
+        raise
+    matches = [row for row in rows if row.get("vers") == version]
+    require(len(matches) <= 1, "duplicate version in the registry index")
+    return matches[0] if matches else None
+
+
 def package_directory():
-    metadata = json.loads(run("cargo", "metadata", "--locked", "--format-version", "1", "--no-deps"))
-    return Path(metadata["target_directory"]) / "package"
+    root = Path.cwd().resolve()
+    registry_stage.load(root)
+    metadata = json.loads(run("cargo", "metadata", "--locked", "--format-version", "1", "--no-deps",
+                              cwd=root / registry_stage.STAGE, env=registry_stage.environment(root)))
+    target = Path(metadata["target_directory"])
+    require(target.is_absolute() and target.resolve() == target and target.is_relative_to(root),
+            "package target must be an owned directory within the developer checkout")
+    return target / "package"
 
 
 def package_hashes(version, *, recover_missing=False):
+    root = Path.cwd().resolve()
+    proof = registry_stage.load(root)
+    stage = root / registry_stage.STAGE
     directory = package_directory()
     if recover_missing and any(not (directory / f"{name}-{version}.crate").is_file() for name in PACKAGES):
-        run("cargo", "package", "--locked", "-p", PACKAGES[0], "--all-features", capture=False)
+        run("cargo", "package", "--locked", "-p", PACKAGES[0], "--all-features", capture=False,
+            cwd=stage, env=registry_stage.environment(root))
     paths = {}
     for name in PACKAGES:
         path = directory / f"{name}-{version}.crate"
         require(path.is_file(), f"missing validated archive: {path}")
+        require(not path.is_symlink() and path.resolve().is_relative_to(root),
+                "package archive must be an owned file within the developer checkout")
         with tarfile.open(path, "r:gz") as archive:
             prefix = f"{name}-{version}/"
             manifest = tomllib.loads(archive.extractfile(prefix + "Cargo.toml").read().decode())
             require(manifest["package"]["name"] == name and manifest["package"]["version"] == version,
                     "package archive identity mismatch")
             vcs = json.load(archive.extractfile(prefix + ".cargo_vcs_info.json"))
-            require(vcs["git"]["sha1"] == git("rev-parse", "HEAD") and not vcs["git"].get("dirty", False),
-                    f"{name}: archive provenance differs from the clean validated commit")
-            require("workspace" not in manifest and "patch" not in manifest,
-                    f"{name}: published manifest retains workspace or patch overrides")
-            for dependency in manifest.get("dependencies", {}).values():
-                require(not isinstance(dependency, dict) or not {"path", "git"}.intersection(dependency),
-                        "published package contains a path or Git dependency")
-        paths[name] = {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+            require(vcs["git"]["sha1"] == proof["projection_commit"] and not vcs["git"].get("dirty", False),
+                    f"{name}: archive provenance differs from the clean registry projection")
+            location = vcs["path_in_vcs"]
+            require(isinstance(location, str) and not Path(location).is_absolute()
+                    and ".." not in Path(location).parts, "invalid archive source location")
+            original = stage / location / "Cargo.toml"
+            require(original.is_file() and tomllib.loads(original.read_text())["package"]["name"] == name
+                    and archive.extractfile(prefix + "Cargo.toml.orig").read() == original.read_bytes(),
+                    f"{name}: archive original manifest differs from its projection")
+            require(not {"workspace", "patch", "replace"}.intersection(manifest),
+                    f"{name}: published manifest retains workspace or overrides")
+            for _, table in registry_stage.dependency_tables(manifest):
+                for dependency in table.values():
+                    require(not isinstance(dependency, dict) or not {"path", "git", "workspace"}.intersection(dependency),
+                            "published package contains a path, Git, or workspace dependency")
+            lock_bytes = archive.extractfile(prefix + "Cargo.lock").read()
+            archived_packages = tomllib.loads(lock_bytes.decode()).get("package", [])
+            require(not any(p.get("source", "").startswith("git+")
+                            or any("(git+" in d for d in p.get("dependencies", [])) for p in archived_packages),
+                    f"{name}: published lock retains a Git dependency")
+            for locked in archived_packages:
+                for dependency in proof["dependencies"]:
+                    if (locked["name"], locked["version"]) == (dependency["name"], dependency["version"]):
+                        require(locked.get("source") == registry_stage.REGISTRY
+                                and locked.get("checksum") == dependency["checksum"],
+                                f"{name}: archive dependency checksum/source differs from the registry projection")
+        paths[name] = {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                       "developer_commit": proof["developer_commit"],
+                       "projection_commit": proof["projection_commit"],
+                       "projection_lock_sha256": proof["projection_lock_sha256"],
+                       "archive_lock_sha256": hashlib.sha256(lock_bytes).hexdigest()}
     return paths
 
 
 def packages(version):
-    run("cargo", "package", "--locked", "-p", PACKAGES[0], "--all-features", capture=False)
+    root = Path.cwd().resolve()
+    registry_stage.prepare(root, api, index_version)
+    context = {"cwd": root / registry_stage.STAGE, "env": registry_stage.environment(root)}
+    run("cargo", "package", "--locked", "-p", PACKAGES[0], "--all-features", capture=False, **context)
     data = package_hashes(version)
-    Path("target").mkdir(exist_ok=True)
     Path("target/release-packages.json").write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-    run("cargo", "publish", "--locked", "--dry-run", "-p", PACKAGES[0], "--all-features", capture=False)
+    run("cargo", "publish", "--locked", "--dry-run", "-p", PACKAGES[0], "--all-features", capture=False, **context)
     require(data == package_hashes(version), "dry-run changed validated package bytes")
 
 
@@ -398,13 +464,16 @@ def publish(version):
             "CARGO_REGISTRY_TOKEN is missing from GitHub Actions secrets; no registry upload attempted")
     tag = "v" + version
     require(tag_provenance(tag) == git("rev-parse", "HEAD"), "publish requires the exact verified tag commit")
+    root = Path.cwd().resolve()
+    registry_stage.prepare(root, api, index_version)  # recheck exact dependency identity and yank state
+    context = {"cwd": root / registry_stage.STAGE, "env": registry_stage.environment(root)}
     data = package_hashes(version)
     require(data == json.loads(Path("target/release-packages.json").read_text()), "validated package bytes changed")
     for name in PACKAGES:
         checksum = data[name]["sha256"]
         record("publishing", version=version, crate=name, packages=data)
         if not registry_matches(name, version, checksum):
-            result = run("cargo", "publish", "--locked", "-p", name, "--all-features", capture=False, check=False)
+            result = run("cargo", "publish", "--locked", "-p", name, "--all-features", capture=False, check=False, **context)
             require(registry_matches(name, version, checksum, attempts=24),
                     f"cargo publish {name} exited {result.returncode}; publication unconfirmed. "
                     f"Use bump=custom, version={version} to resume the immutable tag.")
@@ -432,12 +501,15 @@ def finish(version, validation_url):
     require(data == validated, "validated package bytes changed")
     for name in PACKAGES:
         require(registry_matches(name, version, data[name]["sha256"]), "cannot create a release before registry verification")
+    projection = registry_stage.load(Path.cwd())
     notes = Path("target/release-notes.md")
     rows = "\n".join(f"| [{name}](https://crates.io/crates/{name}/{version}) | `{info['sha256']}` |" for name, info in data.items())
     notes.write_text(
         f"## zharness {version}\n\nAtomic harness primitives with trusted native and untrusted Wasm plugin adapters.\n\n"
         "### Changes\n\n" + changelog_notes(version) + "\n\n"
-        f"Validated commit: `{commit}`. [Validation run]({validation_url}).\n\n"
+        f"Validated developer commit: `{commit}`. [Validation run]({validation_url}).\n\n"
+        f"Registry projection: `{projection['projection_commit']}` (local packaging commit, not a release ref). "
+        "Its dependency mapping, lock checksum and reconstructible patch are retained with the validation artifacts.\n\n"
         "Linux, macOS and Windows compile and execute real native and Wasm plugins. "
         "Rust stable and the 1.99.1 MSRV validate the same candidate, including feature combinations, "
         "no_std targets, hooks/routing contracts, dependency separation, examples and package contents. "
