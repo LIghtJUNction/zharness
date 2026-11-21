@@ -103,8 +103,8 @@ dependencies = [
 
 [[package]]
 name = "zcall"
-version = "0.4.1"
-source = "git+https://github.com/LIghtJUNction/zcall.git#8dd30a922a0aedbe821f610649b1ab26078d1882"
+version = "0.4.2"
+source = "git+https://github.com/LIghtJUNction/zcall.git#aaac54236f7ce0f4e1559c6e3b78d680d9dabf41"
 dependencies = [
  "zconv",
 ]
