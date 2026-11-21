@@ -363,8 +363,8 @@ class PackageRecoveryTests(unittest.TestCase):
         self.assertEqual(Path(root).resolve(), self.root.resolve())
         stage = self.root / "target/registry-stage"
         stage.mkdir(parents=True, exist_ok=True)
-        (stage / "Cargo.toml").write_text(self.projected_manifest)
-        (stage / "Cargo.lock").write_text(self.projected_lock)
+        (stage / "Cargo.toml").write_bytes(self.projected_manifest.encode("utf-8"))
+        (stage / "Cargo.lock").write_bytes(self.projected_lock.encode("utf-8"))
         return self.stage_proof
 
     def archive_bytes(self, readme="verified package"):
