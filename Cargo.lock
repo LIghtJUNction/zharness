@@ -131,7 +131,7 @@ dependencies = [
 [[package]]
 name = "zplugin"
 version = "0.3.1"
-source = "git+https://github.com/LIghtJUNction/zplugin.git#cb24ece40f49257b077da54091b0ecaebea7488a"
+source = "git+https://github.com/LIghtJUNction/zplugin.git#a1a524ff9499415e83725904963c34919aba64db"
 dependencies = [
  "wasmi",
  "zplugin-macros",
@@ -141,7 +141,7 @@ dependencies = [
 [[package]]
 name = "zplugin-macros"
 version = "0.3.1"
-source = "git+https://github.com/LIghtJUNction/zplugin.git#cb24ece40f49257b077da54091b0ecaebea7488a"
+source = "git+https://github.com/LIghtJUNction/zplugin.git#a1a524ff9499415e83725904963c34919aba64db"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -151,4 +151,4 @@ dependencies = [
 [[package]]
 name = "zsys"
 version = "0.1.1"
-source = "git+https://github.com/LIghtJUNction/zsys.git#48c4cafaf940fd7a404b885adefd2e1201b51881"
+source = "git+https://github.com/LIghtJUNction/zsys.git#44dbc7f57ad2ba3336b95dde51f4a24005ea8d68"
