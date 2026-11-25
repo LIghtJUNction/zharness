@@ -1,10 +1,42 @@
 # Release contract
 
-The direct pinned dependencies are zcall 0.3.0 and zplugin 0.3.0; zcall pins
-zconv 0.4.0. Default/native runtime dependencies stay within Project Z. The
-explicit wasm feature adds eight Wasmi runtime packages. The dependency audit
-checks core, default, wasm-only and all-feature graphs separately, excluding
-compiler-only procedural macro/parser packages from runtime claims.
+Development uses Git-only Project Z dependencies. The committed lock records
+the selected source and package version; it is not replaced by registry data
+during release planning or version bumps. The direct dependencies are zcall,
+zplugin and zguard. Their Git closure also contains zconv, zplugin-macros and
+zsys; zplugin and its macro package share a repository but remain distinct
+package identities. The explicit wasm feature adds Wasmi runtime packages.
+The dependency audit checks core, default, wasm-only and all-feature graphs
+separately, excluding compiler-only procedural macro/parser packages from
+runtime claims.
+
+## External Cargo packages
+
+The release script reads the clean developer commit and committed Cargo.lock.
+For every Git package it verifies the exact registry name/version, repository,
+non-yanked state, API checksum and matching sparse-index checksum. A missing,
+ambiguous or mismatched source stops packaging; no dependency update is run.
+
+Packaging uses a separate local checkout at `target/registry-stage`.
+Only manifest Git locations and their matching lock sources/checksums change.
+Each manifest selector becomes the exact locked version, while dependency
+features, existing registry entries, package versions and source files remain
+unchanged. The clean projection commit has the developer candidate as its sole
+parent. It has no remote and is never pushed to main or used as a release tag.
+
+The developer candidate remains the input to the native/MSRV/Wasm checks.
+Cargo package verification and publication dry-runs use the projection and an
+owned package target. The package directory is still read from that invocation's
+Cargo metadata; foreign/shared output directories and symlink archives are
+rejected. Archive VCS identity binds to the projection, while release/tag identity
+binds to the developer commit. The original manifest and packaged lock are
+checked against the projection and registry checksums.
+
+Retained evidence includes `release-projection.json`, its reconstructible
+patch, package hashes and both commit identities. These are validation artifacts,
+not tracked binary files. The developer source remains Git-only after release,
+and its own package/lock version still advances, so the next automatic bump
+starts from the version just released.
 
 ## Select a release
 
@@ -23,8 +55,8 @@ or request workflow and never depends on a generated push triggering another job
 
 ## Exact candidate and validation
 
-The plan validates crate ownership, versions, current tags and exact published
-dependency pins. It computes one reproducible version commit. Version changes
+The plan validates crate ownership, versions, current tags and exact registry
+identities derived from the committed dependency lock. It computes one reproducible version commit. Version changes
 update Cargo manifests, the existing lockfile, README and the pending changelog;
 dependency versions are not silently re-resolved during a release bump.
 
@@ -44,8 +76,8 @@ compiler versions and runner platforms; compilation-only targets are not runtime
 support claims.
 
 After validation, the publication job recreates and checks the identical commit,
-verifies packaged source, and atomically pushes the version commit plus immutable
-annotated tag. Concurrent main changes fail the push. It publishes the package,
+verifies the separate registry package, and atomically pushes the developer
+version commit plus immutable annotated tag. Concurrent main changes fail the push. It publishes the package,
 checks crates.io/archive and registry-index checksums, and creates GitHub Release
 from the verified changelog and CI evidence. Release concurrency never cancels
 an active upload. Read-only CI jobs have only contents:read permissions.
@@ -63,11 +95,16 @@ checksum; a conflicting published version or foreign tag is rejected. Missing
 registry visibility is retried finitely and reported. Existing immutable tags
 are never overwritten or silently adopted.
 
-The workflow retains `release-state.json`, package manifests/checksums and
-archives to identify the completed stage. If registry publication succeeded but
+The workflow retains `release-state.json`, projection provenance, package
+manifests/checksums and archives to identify the completed stage. If registry publication succeeded but
 Release creation failed, recovery verifies existing bytes and completes metadata
-without uploading a different package. Never bump merely to conceal a partial
-release. Historical tags and published archives remain unchanged.
+without uploading a different package. Missing archives may be rebuilt only
+from the verified projection, after prior hash evidence and the clean developer
+tag are checked; the rebuilt bytes must match that evidence before any registry
+or GitHub step. An old developer-SHA archive is not silently relabelled as a
+projection archive. Historical resume checkouts run the script at their exact
+tag and keep its original provenance/checksum contract. Never bump merely to
+conceal a partial release. Historical tags and published archives remain unchanged.
 
 ## Local verification
 

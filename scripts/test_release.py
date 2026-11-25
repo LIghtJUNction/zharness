@@ -9,6 +9,7 @@ from pathlib import Path
 import subprocess
 import tarfile
 import tempfile
+import tomllib
 import unittest
 from unittest.mock import patch
 
@@ -284,13 +285,18 @@ checksum = "preserved-plugin"
     @patch.object(release, "package_directory", return_value=Path("target/package"))
     def test_package_hashes_require_exact_clean_commit_and_registry_sources(self, _package_directory):
         commit = release.candidate("0.2.0", self.source)
+        release.registry_stage.prepare(Path.cwd(), lambda _: None, lambda *_: None)
         path = Path("target/package/zharness-0.2.0.crate")
-        path.parent.mkdir(parents=True)
+        path.parent.mkdir(parents=True, exist_ok=True)
 
         def archive(sha=commit, dirty=False, dependency='zcall = "=0.2.0"'):
             manifest = '[package]\nname = "zharness"\nversion = "0.2.0"\n[dependencies]\n' + dependency
+            stage = Path("target/registry-stage")
             files = {"Cargo.toml": manifest,
-                     ".cargo_vcs_info.json": json.dumps({"git": {"sha1": sha, "dirty": dirty}})}
+                     "Cargo.toml.orig": (stage / "Cargo.toml").read_text(),
+                     "Cargo.lock": (stage / "Cargo.lock").read_text(),
+                     ".cargo_vcs_info.json": json.dumps({"git": {"sha1": sha, "dirty": dirty},
+                                                        "path_in_vcs": ""})}
             with tarfile.open(path, "w:gz") as output:
                 for name, text in files.items():
                     data = text.encode()
@@ -312,7 +318,7 @@ class PackageRecoveryTests(unittest.TestCase):
     def setUp(self):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
-        self.root = Path(directory.name)
+        self.root = Path(directory.name).resolve()
         previous = Path.cwd()
         os.chdir(self.root)
         self.addCleanup(os.chdir, previous)
@@ -322,6 +328,20 @@ class PackageRecoveryTests(unittest.TestCase):
         self.dirty = ""
         self.target = self.root / "custom-build-output"
         self.archive = self.target / "package" / f"zharness-{self.version}.crate"
+        self.projection_commit = "c" * 40
+        self.projected_manifest = ('[package]\nname = "zharness"\nversion = "0.2.0"\n'
+                                   '[dependencies]\nzcall = "=0.4.0"\n')
+        self.projected_lock = ('version = 4\n[[package]]\nname = "zharness"\nversion = "0.2.0"\n'
+                               '[[package]]\nname = "zcall"\nversion = "0.4.0"\n'
+                               'source = "registry+https://github.com/rust-lang/crates.io-index"\n'
+                               'checksum = "' + "d" * 64 + '"\n')
+        self.stage_proof = {"developer_commit": self.commit, "projection_commit": self.projection_commit,
+                            "projection_lock_sha256": hashlib.sha256(self.projected_lock.encode()).hexdigest(),
+                            "dependencies": [{"name": "zcall", "version": "0.4.0", "checksum": "d" * 64}]}
+        for method in ("load", "prepare"):
+            mock = patch.object(release.registry_stage, method, side_effect=self.projection)
+            mock.start()
+            self.addCleanup(mock.stop)
         self.blob = self.archive_bytes()
         self.rebuilt_blob = self.blob
         self.digest = hashlib.sha256(self.blob).hexdigest()
@@ -339,12 +359,22 @@ class PackageRecoveryTests(unittest.TestCase):
             setattr(self, attribute, replacement.start())
             self.addCleanup(replacement.stop)
 
+    def projection(self, root, *args):
+        self.assertEqual(Path(root).resolve(), self.root.resolve())
+        stage = self.root / "target/registry-stage"
+        stage.mkdir(parents=True, exist_ok=True)
+        (stage / "Cargo.toml").write_bytes(self.projected_manifest.encode("utf-8"))
+        (stage / "Cargo.lock").write_bytes(self.projected_lock.encode("utf-8"))
+        return self.stage_proof
+
     def archive_bytes(self, readme="verified package"):
-        manifest = ('[package]\nname = "zharness"\nversion = "0.2.0"\n'
-                    '[dependencies]\nzcall = "=0.4.0"\n')
+        manifest = self.projected_manifest
         files = {
             "Cargo.toml": manifest,
-            ".cargo_vcs_info.json": json.dumps({"git": {"sha1": self.commit, "dirty": False}}),
+            "Cargo.toml.orig": manifest,
+            "Cargo.lock": self.projected_lock,
+            ".cargo_vcs_info.json": json.dumps({"git": {"sha1": self.projection_commit, "dirty": False},
+                                               "path_in_vcs": ""}),
             "README.md": readme,
         }
         buffer = io.BytesIO()
@@ -364,6 +394,9 @@ class PackageRecoveryTests(unittest.TestCase):
         self.fail(f"unexpected git command: {args}")
 
     def command(self, *args, **kwargs):
+        if args[0] == "cargo":
+            self.assertEqual(kwargs.get("cwd"), self.root.resolve() / "target/registry-stage")
+            self.assertEqual(kwargs["env"]["CARGO_TARGET_DIR"], str(self.root.resolve() / "target"))
         if args == ("cargo", "metadata", "--locked", "--format-version", "1", "--no-deps"):
             return json.dumps({"target_directory": str(self.target)})
         if args == ("cargo", "package", "--locked", "-p", "zharness", "--all-features"):
@@ -386,22 +419,30 @@ class PackageRecoveryTests(unittest.TestCase):
             self.archive.write_bytes(self.blob)
         elif self.archive.exists():
             self.archive.unlink()
-        data = {"zharness": {"path": str(self.archive), "sha256": self.digest}}
+        data = self.package_evidence()
         Path("target").mkdir(exist_ok=True)
         Path("target/release-packages.json").write_text(json.dumps(data))
         return data
+
+    def package_evidence(self):
+        return {"zharness": {"path": str(self.archive), "sha256": self.digest,
+                             "developer_commit": self.commit, "projection_commit": self.projection_commit,
+                             "projection_lock_sha256": self.stage_proof["projection_lock_sha256"],
+                             "archive_lock_sha256": hashlib.sha256(self.projected_lock.encode()).hexdigest()}}
 
     def test_archive_is_located_through_cargo_metadata(self):
         expected = self.evidence()
         self.assertEqual(release.package_hashes(self.version), expected)
         self.assertFalse(Path("target/package").exists())
         self.run.assert_called_once_with(
-            "cargo", "metadata", "--locked", "--format-version", "1", "--no-deps")
+            "cargo", "metadata", "--locked", "--format-version", "1", "--no-deps",
+            cwd=self.root.resolve() / "target/registry-stage",
+            env=release.registry_stage.environment(self.root))
 
     def test_packages_preserve_evidence_with_a_custom_target(self):
         self.assertFalse(Path("target").exists())
         release.packages(self.version)
-        expected = {"zharness": {"path": str(self.archive), "sha256": self.digest}}
+        expected = self.package_evidence()
         self.assertEqual(json.loads(Path("target/release-packages.json").read_text()), expected)
         self.assertFalse(Path("target/package").exists())
 
@@ -462,11 +503,13 @@ class RegistryTests(unittest.TestCase):
         owner = {"users": [{"login": "LIghtJUNction"}]}
         manifest = '[dependencies]\nzcall = { version = "=0.2.0", default-features = false }\n'
         for result in (None, {"version": {"yanked": True}}):
-            with patch.object(Path, "read_text", return_value=manifest), \
+            with patch.object(release.registry_stage, "_committed",
+                          return_value=("a" * 40, {"Cargo.toml": manifest}, "version = 4\npackage = []\n")), \
                     patch.object(release, "api", side_effect=[package, owner, result]), \
                     self.subTest(result=result), self.assertRaisesRegex(ValueError, "missing or yanked"):
                 release.registry_preflight("0.4.0")
-        with patch.object(Path, "read_text", return_value=manifest), \
+        with patch.object(release.registry_stage, "_committed",
+                          return_value=("a" * 40, {"Cargo.toml": manifest}, "version = 4\npackage = []\n")), \
                 patch.object(release, "api", side_effect=[package, owner, {"version": {"yanked": False}}]) as api:
             release.registry_preflight("0.4.0")
             self.assertEqual(api.call_args.args, ("crates/zcall/0.2.0",))
@@ -477,9 +520,11 @@ class RegistryTests(unittest.TestCase):
         for value in ['"0.2"', '{ version = "0.2" }',
                       '{ version = "=0.2.0", path = "../zcall" }',
                       '{ version = "=0.2.0", git = "https://example.invalid/zcall" }']:
-            with patch.object(Path, "read_text", return_value='[dependencies]\nzcall = ' + value), \
+            with patch.object(release.registry_stage, "_committed",
+                              return_value=("a" * 40, {"Cargo.toml": '[dependencies]\nzcall = ' + value},
+                                            "version = 4\npackage = []\n")), \
                     patch.object(release, "api", side_effect=[package, owner]), \
-                    self.subTest(value=value), self.assertRaisesRegex(ValueError, "exact registry"):
+                    self.subTest(value=value), self.assertRaisesRegex(ValueError, "exact registry|Git-only"):
                 release.registry_preflight("0.4.0")
 
     def test_foreign_owner_or_repository_blocks_publication(self):
